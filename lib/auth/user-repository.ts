@@ -86,6 +86,48 @@ export async function createUser(input: CreateUserInput): Promise<UserRecord> {
   return toRecord(doc.toObject() as LeanUser);
 }
 
+export interface OAuthUserInput {
+  email: string;
+  name: string;
+  image: string | null;
+  provider: Exclude<AuthProvider, "credentials">;
+}
+
+/**
+ * Signs in an OAuth identity: links it to the existing account with the same (verified)
+ * email, or creates a password-less account. The caller must have checked that the
+ * provider verified the email, otherwise this would let anyone claim an account.
+ */
+export async function upsertOAuthUser(input: OAuthUserInput): Promise<UserRecord> {
+  await connectToDatabase();
+  const email = normalizeEmail(input.email);
+  const existing = await UserModel.findOne({ email }).lean<LeanUser>().exec();
+  if (existing) {
+    await UserModel.updateOne(
+      { _id: existing._id },
+      { $set: { lastLoginAt: new Date(), ...(existing.image ? {} : { image: input.image }) } },
+    ).exec();
+    return toRecord({ ...existing, image: existing.image ?? input.image, lastLoginAt: new Date() });
+  }
+  try {
+    const doc = await UserModel.create({
+      name: input.name.trim().slice(0, 80) || email,
+      email,
+      passwordHash: null,
+      image: input.image,
+      provider: input.provider,
+      lastLoginAt: new Date(),
+    });
+    return toRecord(doc.toObject() as LeanUser);
+  } catch (error) {
+    // Two first sign-ins racing: the unique index decides, and the loser links instead.
+    if (!isDuplicateKeyError(error)) throw error;
+    const winner = await UserModel.findOne({ email }).lean<LeanUser>().exec();
+    if (!winner) throw error;
+    return toRecord(winner);
+  }
+}
+
 export async function recordLogin(id: string): Promise<void> {
   await connectToDatabase();
   await UserModel.updateOne({ _id: id }, { $set: { lastLoginAt: new Date() } }).exec();

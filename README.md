@@ -44,8 +44,8 @@ scheduled, plugins, projects and Chatbot Pro. A bot's widget is one script tag, 
 | --- | --- | --- |
 | `APP_URL` | yes | Public origin, no trailing slash |
 | `AUTH_SECRET` | yes | Signs and encrypts the session cookie, 32+ characters |
-| `MONGODB_URI` | yes | Connection string including the database name |
-| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | no | Google sign-in, currently disabled |
+| `MONGODB_URI` | yes | Connection string including the database name (Atlas SRV strings work; add `/gixxer` before the `?`) |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | no | Google sign-in. Configured and wired, button disabled until `GOOGLE_SIGN_IN_ENABLED` is flipped. Register `<origin>/api/auth/callback/google` on the Google client |
 | `GROQ_API` | for chat | Chat, Think mode and voice transcription (a Groq key, `gsk_…`) |
 | `HUGGINGFACE_API_KEY` | for images and retrieval | Text-to-image and embeddings through Hugging Face inference providers |
 | `GROQ_MODEL`, `GROQ_THINK_MODEL`, `GROQ_FALLBACK_MODEL`, `GROQ_TRANSCRIBE_MODEL`, `HF_IMAGE_MODEL`, `HF_EMBEDDING_MODEL` | no | Model overrides; defaults are verified live |

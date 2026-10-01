@@ -27,7 +27,8 @@ const envSchema = z.object({
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters (openssl rand -base64 32)"),
   MONGODB_URI: z
     .string()
-    .regex(/^mongodb(\+srv)?:\/\//, "MONGODB_URI must start with mongodb:// or mongodb+srv://"),
+    .regex(/^mongodb(\+srv)?:\/\//, "MONGODB_URI must start with mongodb:// or mongodb+srv://")
+    .regex(/^mongodb(\+srv)?:\/\/[^/]+\/[^/?]+/, "MONGODB_URI must include a database name, e.g. .../gixxer?..."),
   AUTH_GOOGLE_ID: optionalSecret,
   AUTH_GOOGLE_SECRET: optionalSecret,
   /** Text, reasoning and speech-to-text all run on Groq. */

@@ -160,11 +160,34 @@ to hide its user list.
 **Sign-in reveals nothing.** A wrong password and an unknown email return exactly the same
 message and take roughly the same time.
 
-**Google sign-in is rendered but disabled.** The button is in its final position so the
-layout does not move later, it is a real `disabled` button with no handler, and the provider
-is only constructed when both `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` are present *and*
-`GOOGLE_SIGN_IN_ENABLED` is true. Turning it on is a one-line change in
-`lib/auth/features.ts` plus the two secrets.
+**Google sign-in is configured but disabled in the UI.** The button is in its final position
+so the layout does not move later, and it is a real `disabled` button with no handler. The
+provider is only mounted when both `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` are present
+*and* `GOOGLE_SIGN_IN_ENABLED` (`lib/auth/features.ts`) is true, so the sign-in endpoint is
+unreachable while the button is off. Everything else is ready:
+
+- The callback Auth.js answers on is `<origin>/api/auth/callback/google`. It must be
+  registered on the Google OAuth client for every origin the app runs on, currently
+  `http://localhost:3000` and `https://gixxer-ai.vercel.app`.
+- There is no database adapter, so `lib/auth/auth.ts` maps a Google identity to a user
+  document in its `jwt` callback with `upsertOAuthUser`: a verified Google email links to
+  the existing account with that email (the password stays), otherwise a password-less
+  account with `provider: "google"` is created. The `signIn` callback refuses unverified
+  emails, which is what makes linking by email safe. The JWT then carries our user id and
+  session version exactly as for a credentials login.
+- The secrets are read only through `lib/env.ts`, server-side. Nothing about Google reaches
+  the client bundle apart from the disabled button.
+
+Turning it on is the one-line flag change.
+
+**MongoDB Atlas.** `MONGODB_URI` is an SRV string (`mongodb+srv://…/gixxer?appName=…`) and
+must include the database name; `lib/env.ts` rejects one without it. `lib/db/mongoose.ts`
+keeps one pool per process on `globalThis`, so development hot reloads and warm serverless
+invocations reuse it, with a small pool and idle timeouts suited to serverless. Some
+development machines route DNS through a local stub that refuses SRV queries; when the
+driver fails that way, the module resolves the SRV and TXT records through public DNS and
+connects with the equivalent standard string (`lib/db/srv.ts`). The tests never use Atlas:
+unit tests run on `gixxer_test` and the browser suite on `gixxer_e2e`, both local.
 
 **Password reset is not implemented.** Faking the email step would be worse than not having
 it. The pieces it needs already exist: `bumpSessionVersion` to invalidate sessions on reset,
