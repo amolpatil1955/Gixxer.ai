@@ -75,6 +75,23 @@ Playwright builds and serves the app on port 3100 against `gixxer_e2e`.
 
 Playwright needs its browser once: `npx playwright install chromium`.
 
+## Deployment (Vercel)
+
+Production runs on Vercel as the project `gixxer-ai`, served at <https://gixxer-ai.vercel.app>.
+`vercel.json` pins the Next.js preset. Every variable in the table above that has a value in
+`.env.local` is set on the project for the production environment, with `APP_URL` set to the
+public origin. The hostname `gixxer-ai.vercel.app` is attached as a deployment alias, not a
+project domain, so a production deploy from the CLI is two commands:
+
+```bash
+npx vercel deploy --prod --yes          # prints the deployment URL
+npx vercel alias set <deployment-url> gixxer-ai.vercel.app
+```
+
+Deployment protection is set to previews only, so the production alias is public. Connecting
+the GitHub repository for automatic deploys needs the Vercel GitHub app installed on the
+repository's GitHub account; until then, deploy from the CLI as above.
+
 ## Project layout
 
 ```
