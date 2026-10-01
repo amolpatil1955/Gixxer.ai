@@ -1,26 +1,930 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ------------------------------------------------------------------------
+   Gixxer.ai design tokens.
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+   The ink scale is SEMANTIC, not literal: `ink-950` always means "furthest
+   back" and `ink-50` always means "furthest forward". Dark mode runs from
+   glossy black (#030000) up to pure white (#FFFFFF); light mode runs the
+   same ramp the other way. Because the scale is semantic, every component
+   works in both themes without a single `dark:` utility.
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+   Colour outside this ramp means "error". It is never decoration.
+   ------------------------------------------------------------------------ */
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+  --font-display: var(--font-exo2), var(--font-geist-sans), ui-sans-serif, sans-serif;
+  --font-serif: var(--font-instrument), "Iowan Old Style", "Times New Roman", serif;
+
+  /* Dark is the default theme. */
+  --color-ink-950: #030000;
+  --color-ink-900: #0b0909;
+  --color-ink-800: #141111;
+  --color-ink-700: #1c1919;
+  --color-ink-600: #292525;
+  --color-ink-500: #3e3a3a;
+  --color-ink-400: #8a8686;
+  --color-ink-300: #aaa6a6;
+  --color-ink-200: #cfcbcb;
+  --color-ink-100: #ebe8e8;
+  --color-ink-50: #ffffff;
+
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-strong: rgba(255, 255, 255, 0.16);
+
+  --color-danger: #ff6b6b;
+  --color-danger-soft: rgba(255, 107, 107, 0.12);
+  --color-success: #5ee39a;
+  --color-warning: #ffcf6b;
+
+  /*
+   * The workspace accent: the one blue in the product, for the reader's own
+   * messages and the send control, the way a chat app marks "you". Never used
+   * on the landing page.
+   */
+  --color-accent: #3b7cf6;
+  --color-accent-hover: #2f6be0;
+  --color-accent-soft: rgba(59, 124, 246, 0.14);
+  --color-on-accent: #ffffff;
+
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 24px 64px -32px rgba(0, 0, 0, 0.95);
+  --shadow-glow: 0 0 40px rgba(255, 255, 255, 0.14);
+  --shadow-float: 0 40px 120px -40px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --shadow-lift: 0 18px 48px -24px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.1);
+
+  --animate-progress: progress 1.8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  --animate-drift: drift 18s ease-in-out infinite alternate;
+  --animate-fade-in: fade-in 0.5s ease-out both;
+  /*
+   * Hero entrance. A CSS animation, not a JavaScript one: the copy is in the
+   * server HTML and starts animating at first paint instead of waiting for
+   * hydration, which is what keeps Largest Contentful Paint low.
+   */
+  --animate-rise: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-caret: caret 1s steps(2, end) infinite;
+  --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-pulse-soft: pulse-soft 2.6s ease-in-out infinite;
+  --animate-marquee: marquee 38s linear infinite;
+  --animate-marquee-slow: marquee 64s linear infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-float-slow: float 11s ease-in-out infinite;
+  --animate-spin-slow: spin 48s linear infinite;
+  --animate-spin-slower: spin 90s linear infinite reverse;
+  --animate-dash: dash 2.4s linear infinite;
+  --animate-sheen: sheen 5s ease-in-out infinite;
+  --animate-blink: blink 2.4s ease-in-out infinite;
+  --animate-ring: ring 3s ease-out infinite;
+  --animate-scan: scan 5s linear infinite;
+  --animate-cycle-3: cycle-3 12s ease-in-out infinite;
+  /* Workspace motion: the greeting's words, twinkling stars over a generating image, a finished image landing. */
+  --animate-word-rise: word-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-twinkle: twinkle 1.8s ease-in-out infinite;
+  --animate-drift-up: drift-up 3.2s ease-in-out infinite;
+  --animate-pop-in: pop-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-thinking: thinking 1.6s linear infinite;
+  --animate-dot-bounce: dot-bounce 1.2s ease-in-out infinite;
+  --animate-listening: listening 1.4s ease-in-out infinite;
+  --animate-burst: burst 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes progress {
+    0% {
+      transform: translateX(-100%);
+    }
+    60% {
+      transform: translateX(0%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  @keyframes drift {
+    from {
+      transform: translate3d(-4%, -2%, 0) scale(1);
+    }
+    to {
+      transform: translate3d(4%, 3%, 0) scale(1.08);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 28px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes caret {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: -200% 0;
+    }
+    to {
+      background-position: 200% 0;
+    }
+  }
+  @keyframes pulse-soft {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  @keyframes marquee {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      transform: translate3d(-50%, 0, 0);
+    }
+  }
+  @keyframes float {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+    50% {
+      transform: translate3d(0, -10px, 0);
+    }
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes dash {
+    to {
+      stroke-dashoffset: -24;
+    }
+  }
+  @keyframes sheen {
+    0%,
+    100% {
+      background-position: 200% 0;
+    }
+    50% {
+      background-position: -200% 0;
+    }
+  }
+  @keyframes blink {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  @keyframes ring {
+    0% {
+      transform: scale(0.6);
+      opacity: 0.7;
+    }
+    100% {
+      transform: scale(1.6);
+      opacity: 0;
+    }
+  }
+  @keyframes scan {
+    from {
+      transform: translateY(-100%);
+    }
+    to {
+      transform: translateY(100%);
+    }
+  }
+  @keyframes word-rise {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 0.6em, 0) rotate(2deg);
+      filter: blur(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
+  }
+  @keyframes twinkle {
+    0%,
+    100% {
+      opacity: 0;
+      transform: scale(0.3) rotate(0deg);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1) rotate(45deg);
+    }
+  }
+  @keyframes drift-up {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      transform: translate3d(0, -14px, 0);
+    }
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(1.04);
+      filter: blur(10px) saturate(0.6);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: blur(0) saturate(1);
+    }
+  }
+  @keyframes thinking {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+  @keyframes dot-bounce {
+    0%,
+    80%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    40% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+  @keyframes listening {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 var(--color-accent-soft);
+    }
+    50% {
+      box-shadow: 0 0 0 10px transparent;
+    }
+  }
+  @keyframes burst {
+    from {
+      opacity: 1;
+      transform: scale(0.2);
+    }
+    to {
+      opacity: 0;
+      transform: scale(1.6);
+    }
+  }
+  /* Three stacked lines, one visible at a time. Used by the hero composer. */
+  @keyframes cycle-3 {
+    0%,
+    27% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    33%,
+    94% {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/*
+ * Theme-dependent surfaces that are not plain colours. Declared once per
+ * theme so utilities below never need to know which theme is active.
+ */
+:root {
+  --grid-line: rgba(255, 255, 255, 0.05);
+  --glow-tint: rgba(255, 255, 255, 0.1);
+  --edge-high: rgba(255, 255, 255, 0.24);
+  --edge-low: rgba(255, 255, 255, 0.05);
+  --gloss-high: rgba(255, 255, 255, 0.12);
+  --gloss-low: rgba(255, 255, 255, 0.03);
+  --sheen: rgba(255, 255, 255, 0.28);
+  --beam: rgba(255, 255, 255, 0.16);
+  --shimmer-base: rgba(255, 255, 255, 0.02);
+  --shimmer-peak: rgba(255, 255, 255, 0.1);
+  --scrim: rgba(3, 0, 0, 0.72);
+  --spot: rgba(255, 255, 255, 0.09);
+  --noise-opacity: 0.045;
+}
+
+/* Light mode: the same semantic ramp, inverted. */
+:root[data-theme="light"] {
+  --color-ink-950: #ffffff;
+  --color-ink-900: #f7f7f7;
+  --color-ink-800: #efefef;
+  --color-ink-700: #e5e5e5;
+  --color-ink-600: #d4d4d4;
+  --color-ink-500: #a3a3a3;
+  --color-ink-400: #6b6b6b;
+  --color-ink-300: #4d4d4d;
+  --color-ink-200: #303030;
+  --color-ink-100: #171717;
+  --color-ink-50: #030000;
+
+  --color-line: rgba(3, 0, 0, 0.09);
+  --color-line-strong: rgba(3, 0, 0, 0.17);
+
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4fd7;
+  --color-accent-soft: rgba(37, 99, 235, 0.12);
+  --color-on-accent: #ffffff;
+
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 18px 48px -28px rgba(3, 0, 0, 0.25);
+  --shadow-glow: 0 0 40px rgba(3, 0, 0, 0.1);
+  --shadow-float: 0 40px 100px -40px rgba(3, 0, 0, 0.28), 0 0 0 1px rgba(3, 0, 0, 0.06);
+  --shadow-lift: 0 18px 48px -24px rgba(3, 0, 0, 0.28), 0 0 0 1px rgba(3, 0, 0, 0.08);
+
+  --grid-line: rgba(3, 0, 0, 0.06);
+  --glow-tint: rgba(3, 0, 0, 0.05);
+  --edge-high: rgba(3, 0, 0, 0.16);
+  --edge-low: rgba(3, 0, 0, 0.04);
+  --gloss-high: rgba(255, 255, 255, 0.9);
+  --gloss-low: rgba(3, 0, 0, 0.04);
+  --sheen: rgba(255, 255, 255, 0.55);
+  --beam: rgba(3, 0, 0, 0.07);
+  --shimmer-base: rgba(3, 0, 0, 0.03);
+  --shimmer-peak: rgba(3, 0, 0, 0.09);
+  --scrim: rgba(255, 255, 255, 0.72);
+  --spot: rgba(3, 0, 0, 0.05);
+  --noise-opacity: 0.03;
+}
+
+/* Lets a component opt into theme-specific rules when a token cannot express the difference. */
+@custom-variant light (&:where([data-theme="light"] *, [data-theme="light"]));
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  html[data-theme="light"] {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-ink-950);
+    color: var(--color-ink-50);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11";
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: var(--color-ink-50);
+    color: var(--color-ink-950);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ink-300);
+    outline-offset: 2px;
+  }
+
+  /* Native autofill in Chromium paints its own background; keep it on-brand. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--color-ink-50);
+    -webkit-box-shadow: 0 0 0 1000px var(--color-ink-800) inset;
+    transition: background-color 9999s ease-in-out 0s;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Surfaces                                                                */
+/* ---------------------------------------------------------------------- */
+
+@utility surface-grid {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 100%);
+}
+
+@utility surface-dots {
+  background-image: radial-gradient(var(--grid-line) 1px, transparent 1.2px);
+  background-size: 22px 22px;
+}
+
+/* Glossy plate: a solid surface with a specular top edge and a soft falloff. */
+@utility plate {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--color-ink-50) 5%, transparent), transparent 42%),
+    var(--color-ink-900);
+  border: 1px solid var(--color-line);
+  box-shadow:
+    inset 0 1px 0 var(--gloss-high),
+    var(--shadow-card);
+}
+
+/* Frosted glass over whatever is behind it. Use sparingly: the blur is not free. */
+@utility glass {
+  background: color-mix(in oklab, var(--color-ink-900) 64%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  backdrop-filter: blur(18px) saturate(1.25);
+  border: 1px solid var(--color-line);
+  box-shadow: inset 0 1px 0 var(--gloss-high);
+}
+
+/* Hairline card border that brightens toward the top-left, like light catching an edge. */
+@utility edge-lit {
+  position: relative;
+  background:
+    linear-gradient(var(--color-ink-900), var(--color-ink-900)) padding-box,
+    linear-gradient(135deg, var(--edge-high), var(--edge-low) 45%, var(--edge-high)) border-box;
+  border: 1px solid transparent;
+}
+
+/* Warm light that fades to nothing, for section backdrops. */
+@utility glow-warm {
+  background: radial-gradient(ellipse at center, var(--glow-tint), transparent 65%);
+}
+
+/* A beam of light falling from the top edge. */
+@utility light-beam {
+  background: conic-gradient(from 180deg at 50% 0%, transparent 42%, var(--beam) 50%, transparent 58%);
+  mask-image: linear-gradient(to bottom, black, transparent 88%);
+}
+
+/* Film grain. Adds depth to large flat surfaces; keep it on a positioned parent. */
+@utility grain {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--noise-opacity);
+    mix-blend-mode: soft-light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+  }
+}
+
+/* Cursor-following spotlight. Set --spot-x / --spot-y from JavaScript. */
+@utility spotlight {
+  position: relative;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    background: radial-gradient(360px circle at var(--spot-x, 50%) var(--spot-y, 50%), var(--spot), transparent 60%);
+  }
+  &:hover::before {
+    opacity: 1;
+  }
+}
+
+/* Moving highlight for "generating" placeholders. */
+@utility shimmer-surface {
+  background-image: linear-gradient(
+    110deg,
+    var(--shimmer-base) 30%,
+    var(--shimmer-peak) 50%,
+    var(--shimmer-base) 70%
+  );
+  background-size: 200% 100%;
+}
+
+/* A highlight that sweeps across a button on hover. */
+@utility btn-sheen {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    pointer-events: none;
+    background: linear-gradient(115deg, transparent 35%, var(--sheen) 50%, transparent 65%);
+    transform: translateX(-130%);
+    transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  &:hover::after {
+    transform: translateX(130%);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Workspace surfaces                                                      */
+/* ---------------------------------------------------------------------- */
+
+/* The composer pill and other raised controls: one step up from the page, with a soft edge. */
+@utility raised {
+  background: var(--color-ink-800);
+  border: 1px solid var(--color-line);
+  box-shadow:
+    inset 0 1px 0 var(--gloss-low),
+    0 10px 30px -18px rgba(0, 0, 0, 0.7);
+}
+
+/* "Thinking…" label: a band of light sliding through muted text. */
+@utility text-thinking {
+  background-image: linear-gradient(100deg, var(--color-ink-400) 0%, var(--color-ink-400) 35%, var(--color-ink-50) 50%, var(--color-ink-400) 65%, var(--color-ink-400) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Thin, quiet scrollbars for the sidebar and long lists. */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-600) transparent;
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--color-ink-600);
+    border-radius: 999px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Type                                                                    */
+/* ---------------------------------------------------------------------- */
+
+/*
+ * The Gixxer wordmark's speed slash: one shallow diagonal gap cut out of the
+ * letterforms. Cutting the glyphs (rather than drawing a line over them) keeps
+ * the mark sharp at every size, and the type stays real, selectable text.
+ */
+@utility wordmark-slash {
+  --slash: linear-gradient(11deg, #000 0 44%, transparent 44% 45.2%, #000 45.2% 100%);
+  -webkit-mask-image: var(--slash);
+  mask-image: var(--slash);
+}
+
+/* Outlined display type, for watermarks and section numbers. */
+@utility text-outline {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--color-ink-500);
+}
+
+/* A slow band of light moving through the letters. */
+@utility text-sheen {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-ink-50) 0%,
+    var(--color-ink-50) 38%,
+    var(--color-ink-400) 50%,
+    var(--color-ink-50) 62%,
+    var(--color-ink-50) 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Editorial accent: the serif italic phrase inside a sans headline. */
+@utility accent-serif {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Masks                                                                   */
+/* ---------------------------------------------------------------------- */
+
+/* Fades a scrolling list out at both ends. */
+@utility fade-edges-x {
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+
+@utility fade-edges-y {
+  mask-image: linear-gradient(to bottom, transparent, black 12%, black 88%, transparent);
+}
+
+@utility mask-fade-b {
+  mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
+}
+
+@utility mask-fade-t {
+  mask-image: linear-gradient(to top, black 55%, transparent 100%);
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+@utility text-pretty {
+  text-wrap: pretty;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Chat markdown and code                                                  */
+/* ---------------------------------------------------------------------- */
+
+.prose-chat {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--color-ink-100);
+  overflow-wrap: anywhere;
+}
+.prose-chat > * + * {
+  margin-top: 0.85em;
+}
+.prose-chat h1,
+.prose-chat h2,
+.prose-chat h3,
+.prose-chat h4 {
+  color: var(--color-ink-50);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin-top: 1.4em;
+}
+.prose-chat h1 { font-size: 1.35em; }
+.prose-chat h2 { font-size: 1.2em; }
+.prose-chat h3 { font-size: 1.08em; }
+.prose-chat h4 { font-size: 1em; }
+.prose-chat p:first-child,
+.prose-chat h1:first-child,
+.prose-chat h2:first-child,
+.prose-chat h3:first-child {
+  margin-top: 0;
+}
+.prose-chat strong { color: var(--color-ink-50); font-weight: 600; }
+.prose-chat a { color: var(--color-ink-50); text-decoration: underline; text-underline-offset: 3px; }
+.prose-chat ul, .prose-chat ol { padding-left: 1.4em; }
+.prose-chat ul { list-style: disc; }
+.prose-chat ol { list-style: decimal; }
+.prose-chat li + li { margin-top: 0.3em; }
+.prose-chat li > p { margin: 0; }
+.prose-chat blockquote {
+  border-left: 2px solid var(--color-line-strong);
+  padding-left: 1em;
+  color: var(--color-ink-300);
+}
+.prose-chat hr { border: 0; border-top: 1px solid var(--color-line); }
+.prose-chat code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+.prose-chat :not(pre) > code {
+  background: var(--color-ink-800);
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  padding: 0.1em 0.4em;
+  color: var(--color-ink-50);
+}
+.prose-chat pre code {
+  display: block;
+  color: var(--color-ink-100);
+  background: transparent;
+}
+.prose-chat table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+.prose-chat th, .prose-chat td {
+  border: 1px solid var(--color-line);
+  padding: 0.45em 0.7em;
+  text-align: left;
+  vertical-align: top;
+}
+.prose-chat th { background: var(--color-ink-900); color: var(--color-ink-50); font-weight: 600; }
+.prose-chat img { max-width: 100%; border-radius: 12px; }
+.prose-chat input[type="checkbox"] { margin-right: 0.5em; }
+
+/* ---------------------------------------------------------------------- */
+/* The "G" loader and the Booster glow                                     */
+/* ---------------------------------------------------------------------- */
+
+/* The reply loader: the G inside two thin rings, an arc of light running around them, two sparkles. */
+.g-loader {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 38px;
+  color: var(--color-ink-50);
+}
+.g-loader .g-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1px solid var(--color-line-strong);
+}
+.g-loader .g-ring-inner {
+  inset: 5px;
+  border-color: var(--color-line);
+}
+.g-loader .g-arc {
+  position: absolute;
+  inset: -1px;
+  border-radius: 999px;
+  background: conic-gradient(from 0deg, transparent 0 62%, color-mix(in oklab, var(--color-accent) 70%, var(--color-ink-50)) 86%, var(--color-ink-50) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 1.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 1.5px));
+  animation: spin 1.3s linear infinite;
+  will-change: transform;
+}
+.g-loader .g-mark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.g-loader .g-spark {
+  position: absolute;
+  color: var(--color-ink-50);
+  filter: drop-shadow(0 0 3px color-mix(in oklab, var(--color-accent) 60%, transparent));
+  animation: twinkle 1.7s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .g-loader .g-arc,
+  .g-loader .g-spark {
+    animation: none;
+  }
+}
+
+/* Booster: a continuous band of colour flowing around the composer's rim.
+   `.booster-ring` is a fixed rounded frame masked down to a 3px rim just outside the composer's
+   border; inside it a large square painted with a conic gradient rotates. Only the rim of that
+   square ever shows, so the colours run around all four sides and corners while the inside
+   stays a solid surface. The rotation is a transform animation: composited on the GPU, no
+   script loop. The halo is the same band, wider, blurred by a wrapper so its edges feather. */
+.booster-glow {
+  position: relative;
+  border-color: transparent;
+}
+:root:not([data-theme="light"]) .booster-glow {
+  background: #080616;
+}
+.booster-ring,
+.booster-ring-halo {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+/* Insets are measured from the padding box; the composer has a 1px border, hence the extra pixel. */
+.booster-ring {
+  inset: -4px;
+  border-radius: 32px;
+  padding: 3px;
+  z-index: 1;
+}
+.booster-halo-blur {
+  position: absolute;
+  inset: -13px;
+  pointer-events: none;
+  filter: blur(5px);
+  opacity: 0.45;
+}
+.booster-ring-halo {
+  inset: 0;
+  border-radius: 41px;
+  padding: 7px;
+}
+.booster-spin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 200%;
+  aspect-ratio: 1;
+  margin-left: -100%;
+  margin-top: -100%;
+  background: conic-gradient(
+    from 0deg,
+    #19e3ff 0deg,
+    #3b7cff 55deg,
+    #b44dff 105deg,
+    #ff3cf0 150deg,
+    #ff7a3c 195deg,
+    #ffe14d 240deg,
+    #2bff9b 290deg,
+    #19e3ff 360deg
+  );
+  animation: booster-spin 4s linear infinite;
+  will-change: transform;
+}
+@keyframes booster-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .booster-spin {
+    animation: none;
+  }
+}
+
+/* A blinking caret after the last block of a reply that is still streaming. */
+.stream-caret .prose-chat > *:last-child::after,
+.stream-caret .prose-chat > *:last-child > li:last-child::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  transform: translateY(0.15em);
+  background: var(--color-ink-50);
+  animation: caret 1s steps(2, end) infinite;
+}
+.stream-caret .prose-chat > pre:last-child::after {
+  display: none;
+}
+
+/* Code cards: the editor's dark palette, whatever the page theme. */
+.code-card { border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 12px 32px -20px rgba(0, 0, 0, 0.9); }
+.code-card pre code { background: transparent; color: #d4d4d4; }
+.code-card .hljs-comment, .code-card .hljs-quote { color: #6a9955; font-style: italic; }
+.code-card .hljs-keyword, .code-card .hljs-selector-tag, .code-card .hljs-doctag, .code-card .hljs-meta-keyword { color: #569cd6; }
+.code-card .hljs-built_in, .code-card .hljs-type, .code-card .hljs-class .hljs-title, .code-card .hljs-title.class_ { color: #4ec9b0; }
+.code-card .hljs-string, .code-card .hljs-regexp, .code-card .hljs-addition, .code-card .hljs-template-tag { color: #ce9178; }
+.code-card .hljs-number, .code-card .hljs-literal, .code-card .hljs-link { color: #b5cea8; }
+.code-card .hljs-title, .code-card .hljs-title.function_, .code-card .hljs-section, .code-card .hljs-function .hljs-title { color: #dcdcaa; }
+.code-card .hljs-attr, .code-card .hljs-attribute, .code-card .hljs-variable, .code-card .hljs-template-variable, .code-card .hljs-property { color: #9cdcfe; }
+.code-card .hljs-name, .code-card .hljs-tag { color: #569cd6; }
+.code-card .hljs-symbol, .code-card .hljs-bullet, .code-card .hljs-selector-id, .code-card .hljs-selector-class { color: #d7ba7d; }
+.code-card .hljs-meta, .code-card .hljs-deletion { color: #c586c0; }
+.code-card .hljs-emphasis { font-style: italic; }
+.code-card .hljs-strong { font-weight: 600; }
+
+/* The voice window's listening rings. */
+.voice-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  animation: voice-ring 1.8s ease-out infinite;
+}
+@keyframes voice-ring {
+  from {
+    transform: scale(0.72);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.25);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-ring {
+    animation: none;
+    opacity: 0.4;
+  }
 }

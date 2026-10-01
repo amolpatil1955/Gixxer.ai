@@ -1,0 +1,31 @@
+"use client";
+
+import { useTransition } from "react";
+import { Button } from "@/components/ui/button";
+import { signOutEverywhereAction } from "@/lib/settings/actions";
+import type { ShellUser } from "../account-menu";
+import { SettingRow } from "./settings-dialog";
+
+export function SecuritySection({ user }: { user: ShellUser }) {
+  const [pending, startTransition] = useTransition();
+
+  function signOutEverywhere() {
+    if (!window.confirm("Sign out on every device, including this one?")) return;
+    startTransition(() => signOutEverywhereAction());
+  }
+
+  return (
+    <div>
+      <SettingRow title="Session" description="Your session is verified against the database on every request, so a revoked session stops working at once." />
+      <SettingRow title="Sign-in method">
+        <span className="text-[13px] text-ink-200">{user.provider === "google" ? "Google" : "Email and password"}</span>
+      </SettingRow>
+      <SettingRow title="Sign out everywhere" description="Ends every active session for this account, on every device. You will sign in again here.">
+        <Button size="sm" variant="secondary" onClick={signOutEverywhere} loading={pending} loadingLabel="Signing out…">
+          Sign out everywhere
+        </Button>
+      </SettingRow>
+      <SettingRow title="Password" description="Password changes and resets are not built yet. Sign out everywhere if you believe a session was compromised." />
+    </div>
+  );
+}

@@ -1,0 +1,263 @@
+# Workspace architecture
+
+Phase 3 of Gixxer.ai: the AI workspace behind `/app`. Written for engineers working on this
+codebase. Read `auth.md` first; everything here sits behind `requireUser()`.
+
+## Layers
+
+```
+Browser (client components)        components/workspace, chat, images, library, scheduled, plugins, projects, chatbots, widget
+  ├─ Route handlers                app/api/*            streaming, uploads, transcription, export, cron, public widget
+  └─ Server Actions                lib/*/actions.ts     mutations with revalidation
+       └─ Services                 lib/chat, files, images, bots, knowledge, plugins, schedules
+            ├─ Provider manager    lib/ai/manager.ts    the only thing that talks to a model
+            └─ Repositories        lib/*/repository.ts  the only things that query MongoDB
+                 └─ Mongoose       lib/db/models/workspace.models.ts, lib/db/storage.ts
+```
+
+The rule from Phases 1 and 2 still holds: routes and components never query the database or
+call a provider. They call a function in `lib/`, and that function owns the details.
+
+## Tenant boundary
+
+Every workspace document carries `userId`, and every repository function takes the owner's
+id and puts it in the query. A conversation, file, image, bot, project, schedule or settings
+document that belongs to someone else is indistinguishable from one that does not exist: the
+repository returns `null`, the page renders 404, the API answers 404. There is no code path
+that reads a document without the owner's id in the filter, and
+`tests/unit/tenant-isolation.test.ts` plus the "tenant isolation over HTTP" end-to-end tests
+assert it from both sides.
+
+Retrieval is scoped the same way: chunks carry `userId`, and `retrieveChunks(userId, scope)`
+never reads outside it. A public bot answers with its **owner's** id, so it can only ever
+read its owner's knowledge.
+
+## Providers
+
+`lib/ai/manager.ts` is the single entry point. Everything runs on two accounts:
+
+| Need | Provider | Model (override) |
+| --- | --- | --- |
+| Chat | Groq | `qwen/qwen3.8-27b` (`GROQ_MODEL`) |
+| Think mode | Groq | `openai/gpt-oss-120b` (`GROQ_THINK_MODEL`), streams `reasoning` deltas |
+| Continuation when a model stalls | Groq | `openai/gpt-oss-20b` (`GROQ_FALLBACK_MODEL`) |
+| Voice input | Groq | `whisper-large-v3-turbo` (`GROQ_TRANSCRIBE_MODEL`) |
+| Images | Hugging Face inference providers | `black-forest-labs/FLUX.1-schnell`, then `Tongyi-MAI/Z-Image-Turbo` |
+| Embeddings | Hugging Face inference providers | `sentence-transformers/all-MiniLM-L6-v2` (`HF_EMBEDDING_MODEL`) |
+
+`streamChat(turns, { reasoning })` yields `provider`, `reasoning` and `token` events. The chain
+is `[chat, fallback]`, or `[think, chat, fallback]` with Think mode on:
+
+1. A retryable failure before the first token (429, 5xx, timeout, network) is retried once
+   after a short backoff, then handed to the next model.
+2. A failure after tokens have flowed is handed to the next model with the partial reply
+   attached and an instruction to continue, so the reader sees one answer, not two.
+3. If every model fails, one `ProviderError` surfaces with a normalised `code`, and the user
+   sees a generic, retryable message. Details go to the server log only.
+
+Each provider has two clocks (`lib/ai/providers/timing.ts`): time to first token and total
+time. The user's stop button is an `aborted` error, never a provider failure.
+
+Gemini was the primary model until September 2026 and was removed at the owner's request;
+chat and embeddings no longer touch Google at all. Chunks embedded by the old model have a
+different vector width, and `rankChunks` ranks such a chunk on words alone rather than
+comparing incompatible vectors. Re-index a file to refresh its embeddings.
+
+`AI_MOCK=1` replaces every provider with deterministic stand-ins (an echo that also "thinks"
+when asked, a hashed pseudo-embedding, a real PNG, a fixed transcript). The unit and
+end-to-end suites run entirely on mocks.
+
+## Chat
+
+Booster (the reasoning model, formerly "Think") is a per-viewer switch kept in localStorage so it survives the first message of a chat. While it activates or works, the composer shows a flowing rim: a fixed rounded frame masked to a 3px edge (`.booster-ring`) with a large conic-gradient square rotating inside it, so only the rim shows colour and the inside stays solid. The rotation is a transform animation, composited on the GPU, with no script loop.
+
+Messages form a tree (`parentId`). Editing a message adds a sibling under the same parent;
+regenerating adds a sibling reply. The conversation records `activeLeafId`, and
+`threadFor()` walks from that leaf to the root to produce the visible path, annotating each
+message with its sibling position so the UI can show `1/2` and switch branches. Conversations
+can be pinned (they sort first) and can belong to a project. Assistant messages keep the
+reader's thumbs up or down and, in Think mode, the model's reasoning.
+
+`POST /api/chat` streams newline-delimited JSON (`meta`, `provider`, `reasoning`, `token`,
+`citations`, `done`, `error`). The route commits to a streaming response only after the first
+event resolves, so validation and not-found errors are still ordinary JSON status codes. The
+client's abort ends the stream; the server saves the partial reply with status `stopped`.
+
+The system prompt is assembled per turn, in this order: the base prompt; the user's
+personalization (tone, nickname, custom instructions) and the project's instructions;
+knowledge from files attached anywhere in the visible thread; whatever the enabled plugins
+add. Retrieved chunks are fenced in `<document>` tags with a `[source: name · locator]`
+marker, and the prompt says to cite that locator and to treat the block as data. Citations
+stored on the message are the chunks whose locator the reply used, else the top two consulted.
+
+The browser sends its IANA time zone with every turn, so the Date & time plugin and the
+schedules speak the reader's local time.
+
+In the browser, streamed text is smoothed (`lib/motion/use-smooth-stream.ts`): the displayed
+text advances a word or a line at a time at a reading pace, a little faster when far behind,
+and finishes within a moment of the stream ending, so bursts read as a steady flow and nothing
+is ever cut mid-word. The conversation opens at its end before first paint, so nothing jumps.
+Voice input lives in a centred window (`components/chat/voice-modal.tsx`) with one state at a
+time (asking, listening, writing it down, blocked, unavailable); it records with
+`MediaRecorder` and posts the clip to `POST /api/transcribe`; nothing is stored. Code in
+replies renders in an editor-style dark card with the editor's token palette, a language label
+and a copy control.
+
+## Pictures and documents made in the chat
+
+`lib/chat/intents.ts` decides, from the message alone, whether the reader asked for a picture
+("generate an image of…", "draw me a logo for…"), a document ("create a PDF about…", "make an
+Excel spreadsheet of…", "…as a txt file"), or just text. Questions about images stay text.
+
+- An image request skips the text model: `createImage` (the same path as the studio) makes one
+  picture, the reply says so, and the message carries an `artifact` of kind `image`. The
+  browser shows a dot-grid loader the size of the final image while it waits, for the real
+  generation time and never less than about three seconds, then completes it to 100% and
+  reveals the picture; a fast provider never makes the picture pop in instantly.
+- A document request adds format guidance to the system prompt and gathers the answer
+  quietly (the reader sees the loader, not the body), then `lib/documents/build.ts` turns the
+  answer into the file (a hand-written PDF writer, SheetJS for workbooks, UTF-8 for text),
+  stores it in the library and attaches it as an artifact of kind `file`. The stored reply is
+  one line ("Your PDF is ready."); the chat shows a "Download …" link and a compact card
+  (icon, name, kind, download) that opens the preview panel. The document's body lives only
+  in the file. If the build fails, the full answer is shown instead so nothing is lost.
+  `GET /api/files/{id}/preview` (owner only, `lib/files/preview.ts`) returns the file shaped
+  for the panel: a workbook as sheets of cells (bounded to 12 sheets of 300 x 40), a PDF as
+  pages of text extracted with `unpdf`, a text file as text. The panel's chrome is the app's
+  (a "Library / name" breadcrumb, zoom, a small menu, download, full screen, close); the
+  document area is drawn the way its kind is drawn in the real thing, so it stays light in
+  both themes: a workbook as a white grid with a name box, a formula bar, lettered columns,
+  numbered rows, a black header row, blue striping and sheet tabs; a PDF as white A4 pages on
+  a grey desk with page navigation when there is more than one page. "Open in a new tab"
+  hands the real bytes to the browser's own viewer.
+
+Loading states are deliberately few: one "G" loader (`components/chat/g-loader.tsx`: the G
+mark inside two thin rings with a rotating arc and two sparkles, all transform and opacity
+animations) before a text reply, and one dot-grid box the size of the coming picture
+(`components/images/image-generating.tsx`, a canvas drawn at 30 frames a second, paused when
+the tab is hidden) before an image. The percentage is an estimate from the last generation's
+duration and only reaches 100 when the real image arrives.
+
+Which model answered is stored on the message and logged, but never sent to the browser:
+the `provider` wire event is gone and no provider or model name appears in the workspace UI.
+
+## Plugins
+
+`lib/plugins/catalog.ts` lists what exists. The three available plugins run inside
+`lib/plugins/apply.ts` around a turn and only ever add system text:
+
+- **Web page reader**: up to two public links in the message are fetched through the SSRF
+  guard (`lib/security/ssrf.ts`), reduced to text and fenced as documents.
+- **Library knowledge**: retrieval runs over every indexed file in the library, not only
+  attachments, and cites the same way.
+- **Date & time**: the current date and time in the reader's zone.
+
+Connectors that need an account (Slack, Google Calendar, Cloudflare, n8n, Gmail, Drive) are
+listed as coming soon and cannot be switched on. Enabled plugin ids live in the user's
+settings document.
+
+## Projects
+
+A project is a name and standing instructions. Conversations carry an optional `projectId`;
+a chat started from a project's page (or moved into one from the sidebar) inherits the
+project's instructions on every turn. Deleting a project detaches its chats.
+
+## Scheduled prompts
+
+A schedule is a prompt, a cadence (daily, weekdays, weekly, monthly), a wall-clock time and
+the owner's IANA zone. `lib/schedules/timing.ts` computes the next run without a date
+library: it reads the zone's wall clock through `Intl` and converts wall time back to an
+instant with a two-pass offset correction, so DST changes land on the right side of the gap.
+
+A run is an ordinary chat turn: a new conversation whose first message is the prompt, answered
+to completion, then renamed `<name> · <date>`. `claimDueSchedule` moves `nextRunAt` forward
+atomically before running, so two runners never take the same run. Runs happen in two ways:
+
+- the workspace layout calls `runDueSchedules({ userId })` inside `after()`, so a user's
+  overdue schedules run right after any page they open is served;
+- `POST /api/cron` with `Authorization: Bearer <CRON_SECRET>` runs everyone's due schedules,
+  for deployments with an external scheduler. Without the secret the route answers 404.
+
+## Files and knowledge
+
+Upload → validate (extension allow-list, size ≤ 20 MB, magic-byte sniff for binary formats,
+NUL check for text) → GridFS → extract → chunk → embed → index. Indexing runs after the
+upload response via `after()`; the library and composer poll `?meta=1` until the status
+settles.
+
+| Format | Extractor | Locator |
+| --- | --- | --- |
+| PDF | `unpdf` per page | `p.17` |
+| DOCX | `mammoth` raw text | `part 3` |
+| TXT, MD | as is | `part 1` |
+| CSV, XLS, XLSX | SheetJS, per sheet, 20-row windows, header repeated | `Retention!A2:F21` |
+
+Spreadsheet chunks repeat the header on every window so a value never loses its column.
+
+Bot knowledge uses the same chunk store with `botId` and `sourceId`. Sources are pasted
+text, a library file, or a web page fetched server-side through `lib/security/ssrf.ts`
+(http(s) only, public hosts only, DNS resolved and checked, 2 MB, 15 s).
+
+## Images
+
+`POST /api/images` generates one picture and stores it in GridFS. The studio prepends a style
+preset (`lib/images/styles.ts`) to the prompt when one is chosen; the example image for each
+style in `public/styles` was generated with the same model. Progress is an estimate: the
+ring eases toward 92% on the basis of the last generation's duration (kept in the browser),
+completes to 100% when the bytes arrive, and then the image replaces it.
+
+## Reference photos (Unsplash)
+
+The Images page has a Photos tab that searches Unsplash for reference photos. This is search
+only; generation stays on Hugging Face. `lib/unsplash/client.ts` is the only code that talks
+to Unsplash, through `GET /api/unsplash/search` and `POST /api/unsplash/download` (signed-in,
+rate limited). The access key rides in the server's request header and nowhere else; the
+secret key and application id are read by `lib/env.ts` and never used by the app. Every result
+carries the photographer's name linked to their profile and a link to the photo on Unsplash,
+both with the referral parameters Unsplash asks for, and a download is reported to the
+download endpoint before the file's address is handed over. With `AI_MOCK=1` the search
+returns the style example images attributed to a stand-in photographer.
+
+## Settings and data
+
+`user_settings` holds tone, nickname, custom instructions and enabled plugins, one document
+per user, created on first save. The settings window also offers "sign out everywhere"
+(`bumpSessionVersion`, see `auth.md`), "delete all chats", and `GET /api/export`, one JSON
+file with the user's chats, settings, projects, schedules and the records of files and images.
+
+## Chatbot Pro and the widget
+
+A bot has a `publicKey` (`gx_` + 16 random bytes) that is the only identifier the public
+ever sees. `getLiveBotByKey` returns nothing for draft bots.
+
+- `GET /widget.js` serves `lib/widget/script.ts`: a launcher button and an iframe pointing
+  at `/embed/{key}?host={origin}`. It is loaded cross-origin, so it carries CORS headers and
+  no secrets.
+- `/embed/{key}` renders `EmbedChat`. It is the one page allowed to be framed: `proxy.ts`
+  sets `frame-ancestors *` for `/embed/*` and `next.config.ts` withholds `X-Frame-Options`
+  there. Everything else keeps `frame-ancestors 'none'`.
+- `POST /api/widget/{key}/chat` streams a reply. It is rate limited per visitor address and
+  per bot, checks the host origin against the bot's allow-list when one is set, and answers
+  with the owner's id. The visitor's identity is a random session id in their browser.
+- `POST /api/widget/{key}/lead` stores a lead under the owner.
+
+The owner's dashboard (`/app/chatbots/{id}/{tab}`) has the ten tabs from the blueprint:
+overview, settings, instructions, knowledge, appearance, behavior, conversations, leads,
+analytics, embed.
+
+## Rate limits
+
+`lib/security/ai-rate-limits.ts`, in-process like the auth limits. Per account: chat 60 per
+10 min, images 20 per hour, uploads 40 per hour, page fetches 30 per hour, transcriptions 60
+per hour, manual schedule runs 30 per hour. Public: widget 40 per 10 min per address and 400
+per hour per bot, leads 10 per hour per address. Swap in a shared store behind the same
+interface when running more than one instance.
+
+## The shell
+
+`components/workspace/shell.tsx` is the frame: a sidebar that collapses to an icon rail on
+wide screens (a per-viewer choice in localStorage, read through `useSyncExternalStore`) and
+becomes a drawer on phones, the account menu, and the settings window. The one colour outside
+the ink ramp is the accent blue, used for the reader's own messages and the send control.
+`Permissions-Policy` allows the microphone for the page itself (`microphone=(self)`) so the
+composer can record; nothing framed can.
