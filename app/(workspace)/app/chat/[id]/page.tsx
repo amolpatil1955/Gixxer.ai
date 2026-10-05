@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ChatView } from "@/components/chat/chat-view";
+import { voiceConfigured } from "@/lib/ai/manager";
 import { requireUser } from "@/lib/auth/session";
 import { toThreadDto } from "@/lib/chat/serialize";
 import { loadThread } from "@/lib/chat/service";
@@ -30,6 +31,7 @@ export default async function ChatPage({ params }: PageProps<"/app/chat/[id]">) 
       greetingName={settings.nickname || (user.name.trim().split(/\s+/)[0] ?? user.name)}
       project={projectSummary}
       header={{ title: conversation.title, pinned: conversation.pinned, project: projectSummary }}
+      voiceAvailable={voiceConfigured()}
     />
   );
 }

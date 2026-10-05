@@ -4,6 +4,7 @@ import { isProviderError, ProviderError } from "./errors";
 import { groqProvider, groqTranscribe } from "./providers/groq";
 import { generateImage as hfGenerateImage, hfEmbed } from "./providers/huggingface";
 import { mockEmbed, mockImage, mockProvider, mockTranscribe } from "./providers/mock";
+import { geminiLiveConfigured, mintLiveToken, type LiveTokenInput } from "./realtime/gemini-live";
 import type { ChatTurn, ImageRequest, ImageResult, ProviderName, StreamOptions, TextProvider, TranscriptionRequest, TranscriptionResult } from "./types";
 
 /*
@@ -132,6 +133,25 @@ export async function generateImage(request: ImageRequest): Promise<ImageResult>
 export async function transcribeAudio(request: TranscriptionRequest): Promise<TranscriptionResult> {
   if (getEnv().AI_MOCK) return mockTranscribe(request);
   return groqTranscribe(request);
+}
+
+/** Whether realtime voice conversations can be opened at all. */
+export function voiceConfigured(): boolean {
+  return getEnv().AI_MOCK || geminiLiveConfigured();
+}
+
+export type VoiceSessionToken = { mock: true } | { mock: false; token: string; model: string; newSessionExpiresAt: string };
+
+/**
+ * A short-lived credential the browser uses to hold one voice conversation.
+ * Realtime voice is the one capability a browser must reach directly, so the
+ * manager mints a single-use token bound to a locked configuration instead of
+ * ever handing out the provider's key.
+ */
+export async function createVoiceSessionToken(input: LiveTokenInput): Promise<VoiceSessionToken> {
+  if (getEnv().AI_MOCK) return { mock: true };
+  const minted = await mintLiveToken(input);
+  return { mock: false, token: minted.token, model: minted.model, newSessionExpiresAt: minted.newSessionExpiresAt };
 }
 
 /** A message safe to show a person for any provider failure. Details go to the log. */

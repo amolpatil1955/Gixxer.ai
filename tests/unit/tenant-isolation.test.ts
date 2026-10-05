@@ -26,14 +26,18 @@ const alice = new Types.ObjectId().toString();
 const bob = new Types.ObjectId().toString();
 
 describe.runIf(dbAvailable)("tenant isolation (MongoDB)", () => {
+  // Only this file's accounts: the suites share one database and run in parallel,
+  // so wiping a whole collection would pull rows out from under another file's test.
+  const own = { userId: { $in: [new Types.ObjectId(alice), new Types.ObjectId(bob)] } };
+
   beforeEach(async () => {
     await Promise.all([
-      ConversationModel.deleteMany({}),
-      MessageModel.deleteMany({}),
-      FileModel.deleteMany({}),
-      ChunkModel.deleteMany({}),
-      BotModel.deleteMany({}),
-      BotSourceModel.deleteMany({}),
+      ConversationModel.deleteMany(own),
+      MessageModel.deleteMany(own),
+      FileModel.deleteMany(own),
+      ChunkModel.deleteMany(own),
+      BotModel.deleteMany(own),
+      BotSourceModel.deleteMany(own),
     ]);
   });
 

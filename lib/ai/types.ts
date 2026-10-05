@@ -7,7 +7,7 @@ export interface ChatTurn {
   content: string;
 }
 
-export type ProviderName = "groq" | "mock";
+export type ProviderName = "groq" | "gemini" | "mock";
 
 export interface StreamOptions {
   signal?: AbortSignal;

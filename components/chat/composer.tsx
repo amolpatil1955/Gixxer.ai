@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Mic, Square } from "lucide-react";
+import { AudioLines, ArrowUp, Mic, Square } from "lucide-react";
 import { useEffect, useRef, useState, type Dispatch, type KeyboardEvent, type SetStateAction } from "react";
 import { MESSAGE_MAX_LENGTH } from "@/lib/chat/validation";
 import { cn } from "@/lib/utils/cn";
@@ -22,6 +22,8 @@ interface ComposerProps {
   autoFocus?: boolean;
   placeholder?: string;
   conversationId?: string | null;
+  /** Offered only where a spoken conversation makes sense, and only when it is configured. */
+  onStartVoice?: () => void;
 }
 
 /** The flowing rim around the composer while Booster is activating or working. */
@@ -45,7 +47,7 @@ function BoosterRing() {
  * Think, the microphone and send on the right. Enter sends, Shift+Enter
  * breaks a line, and send becomes stop while a reply streams.
  */
-export function Composer({ onSend, onStop, streaming, disabled, attachments, onAttachmentsChange, think, onThinkChange, boosterGlow = false, autoFocus, placeholder, conversationId = null }: ComposerProps) {
+export function Composer({ onSend, onStop, streaming, disabled, attachments, onAttachmentsChange, think, onThinkChange, boosterGlow = false, autoFocus, placeholder, conversationId = null, onStartVoice }: ComposerProps) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -138,6 +140,18 @@ export function Composer({ onSend, onStop, streaming, disabled, attachments, onA
           >
             <Mic className="size-4.5" aria-hidden="true" />
           </button>
+          {onStartVoice ? (
+            <button
+              type="button"
+              disabled={disabled || streaming}
+              onClick={onStartVoice}
+              aria-label="Talk to Gixxer"
+              title="Talk to Gixxer"
+              className="flex size-9 items-center justify-center rounded-full text-ink-200 transition-colors hover:bg-ink-700 hover:text-ink-50 disabled:opacity-40"
+            >
+              <AudioLines className="size-4.5" aria-hidden="true" />
+            </button>
+          ) : null}
           {streaming ? (
             <button type="button" onClick={onStop} aria-label="Stop generating" title="Stop" className="flex size-9 items-center justify-center rounded-full bg-ink-50 text-ink-950 transition-colors hover:bg-white">
               <Square className="size-3.5 fill-current" aria-hidden="true" />

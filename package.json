@@ -16,6 +16,7 @@
     "verify": "npm run check && npm run test:e2e"
   },
   "dependencies": {
+    "@google/genai": "^2.27.0",
     "@hookform/resolvers": "^5.9.1",
     "@huggingface/inference": "^4.13.30",
     "@react-three/fiber": "^9.8.1",

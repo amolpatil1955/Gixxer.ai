@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ChatView } from "@/components/chat/chat-view";
 import type { PendingAttachment } from "@/components/chat/attachments";
+import { voiceConfigured } from "@/lib/ai/manager";
 import { requireUser } from "@/lib/auth/session";
 import { getFile } from "@/lib/files/repository";
 import { getProject } from "@/lib/projects/repository";
@@ -35,6 +36,7 @@ export default async function NewChatPage({ searchParams }: PageProps<"/app">) {
       greetingName={settings.nickname || firstName(user.name)}
       initialAttachments={initialAttachments}
       project={project ? { id: project.id, name: project.name } : null}
+      voiceAvailable={voiceConfigured()}
     />
   );
 }

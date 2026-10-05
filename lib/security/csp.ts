@@ -20,7 +20,8 @@ export function buildContentSecurityPolicy({ nonce, isDevelopment, embeddable = 
     // Unsplash reference photos load straight from its CDN; the API itself is only ever called server-side.
     "img-src 'self' blob: data: https://lh3.googleusercontent.com https://images.unsplash.com https://plus.unsplash.com",
     "font-src 'self' data:",
-    `connect-src 'self'${isDevelopment ? " ws: wss:" : ""}`,
+    // Realtime voice is a direct websocket to the provider's live endpoint; nothing else is reachable.
+    `connect-src 'self' https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com${isDevelopment ? " ws: wss:" : ""}`,
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",

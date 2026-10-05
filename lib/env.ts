@@ -35,6 +35,14 @@ const envSchema = z.object({
   GROQ_API: optionalSecret,
   /** Images and embeddings run on Hugging Face inference providers. */
   HUGGINGFACE_API_KEY: optionalSecret,
+  /**
+   * Realtime voice conversations run on Gemini's Live API. This is the only
+   * place Gemini is used: text, reasoning and transcription stay on Groq.
+   * Server-side only; unset hides the voice conversation button.
+   */
+  GEMINI_API_KEY: optionalSecret,
+  GEMINI_LIVE_MODEL: withDefault("gemini-live-2.5-flash-preview"),
+  GEMINI_LIVE_VOICE: withDefault("Aoede"),
   /** Model overrides. The defaults are the ones verified against the live APIs. */
   GROQ_MODEL: withDefault("qwen/qwen3.8-27b"),
   GROQ_THINK_MODEL: withDefault("openai/gpt-oss-120b"),

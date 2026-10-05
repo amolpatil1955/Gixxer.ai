@@ -4,6 +4,7 @@ import { ArrowDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Lightbox, type LightboxImage } from "@/components/images/lightbox";
+import { VoiceAssistant } from "@/components/voice/voice-assistant";
 import { Alert } from "@/components/ui/alert";
 import { switchBranchAction } from "@/lib/chat/actions";
 import type { ArtifactDto, ChatWireEvent, CitationDto, ThreadMessageDto } from "@/lib/chat/types";
@@ -30,6 +31,8 @@ interface ChatViewProps {
   project?: { id: string; name: string } | null;
   /** The bar above an existing conversation. */
   header?: Omit<ChatHeaderProps, "conversationId"> | null;
+  /** False when realtime voice is not configured, so the control is not offered. */
+  voiceAvailable?: boolean;
 }
 
 /** A picture is never shown in a blink: the loader stays at least this long, so the wait reads as real work. */
@@ -67,7 +70,7 @@ function browserTimeZone(): string | undefined {
  * POST /api/chat, and reconciles with the server (router.refresh) once a
  * turn has settled, so the sidebar and branch counts stay truthful.
  */
-export function ChatView({ conversationId, initialThread, greetingName, initialAttachments = [], project = null, header = null }: ChatViewProps) {
+export function ChatView({ conversationId, initialThread, greetingName, initialAttachments = [], project = null, header = null, voiceAvailable = false }: ChatViewProps) {
   const router = useRouter();
   const [thread, setThread] = useState<ThreadMessageDto[]>(initialThread);
   const [attachments, setAttachments] = useState<PendingAttachment[]>(initialAttachments);
@@ -78,6 +81,7 @@ export function ChatView({ conversationId, initialThread, greetingName, initialA
   const [openFile, setOpenFile] = useState<ArtifactDto | null>(null);
   const [openImage, setOpenImage] = useState<LightboxImage | null>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const currentId = useRef<string | null>(conversationId);
   // The same id as state, for what is rendered: the header appears once the server has named the chat.
@@ -382,9 +386,31 @@ export function ChatView({ conversationId, initialThread, greetingName, initialA
       boosterGlow={boosterPulse || (think && streamingId !== null)}
       autoFocus
       conversationId={liveId}
+      onStartVoice={voiceAvailable ? () => setVoiceOpen(true) : undefined}
       placeholder={project ? `Ask anything in ${project.name}` : undefined}
     />
   );
+
+  // The spoken conversation writes into this chat, so a chat it starts becomes the open one.
+  const voice = voiceAvailable ? (
+    <VoiceAssistant
+      open={voiceOpen}
+      conversationId={liveId}
+      projectId={project?.id ?? null}
+      onConversation={(turn) => {
+        if (!currentId.current) {
+          currentId.current = turn.conversationId;
+          setLiveId(turn.conversationId);
+          window.history.replaceState(null, "", workspaceRoutes.chat(turn.conversationId));
+        }
+        // No refresh here: it would remount this screen and end the call. The thread catches up on close.
+      }}
+      onClose={() => {
+        setVoiceOpen(false);
+        router.refresh();
+      }}
+    />
+  ) : null;
 
   if (empty) {
     return (
@@ -403,6 +429,7 @@ export function ChatView({ conversationId, initialThread, greetingName, initialA
             </div>
           </div>
         </div>
+        {voice}
       </div>
     );
   }
@@ -444,6 +471,7 @@ export function ChatView({ conversationId, initialThread, greetingName, initialA
       </div>
       <ArtifactPanel artifact={openFile} onClose={() => setOpenFile(null)} />
       <Lightbox image={openImage} onClose={() => setOpenImage(null)} />
+      {voice}
     </div>
   );
 }

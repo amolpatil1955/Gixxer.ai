@@ -63,8 +63,11 @@ const owner = new Types.ObjectId().toString();
 const other = new Types.ObjectId().toString();
 
 describe.runIf(dbAvailable)("website knowledge (MongoDB)", () => {
+  // Only this file's accounts: the suites share one database and run in parallel.
+  const own = { userId: { $in: [new Types.ObjectId(owner), new Types.ObjectId(other)] } };
+
   beforeEach(async () => {
-    await Promise.all([BotModel.deleteMany({}), BotSourceModel.deleteMany({}), ChunkModel.deleteMany({})]);
+    await Promise.all([BotModel.deleteMany(own), BotSourceModel.deleteMany(own), ChunkModel.deleteMany(own)]);
   });
 
   afterAll(async () => {

@@ -167,6 +167,48 @@ no `reasoning` event, `provider` field or thought panel reaches the client. The 
 tells the assistant to name no model, provider, tool or internal detail, and to answer without
 narrating how it got there.
 
+## The voice assistant
+
+`/app` and every chat offer a spoken conversation beside the dictation button. It is the same
+chat, spoken: the session is opened for the current conversation, carries that conversation's
+recent turns into the model's instructions, and every finished exchange is written back as an
+ordinary user message and assistant message, so the text view and the voice window share one
+history. A chat started by voice becomes the open chat.
+
+Realtime voice is the one capability a browser must reach a provider directly, so it is the one
+place Gemini is used; text, reasoning, images, embeddings and dictation are unchanged.
+`POST /api/voice/session` mints a **single-use ephemeral token** through
+`lib/ai/realtime/gemini-live.ts`, valid for one new session within ninety seconds, bound to a
+configuration the server locked (model, voice, system instruction, transcription, turn
+detection). The provider's API key never leaves the server, and the browser cannot widen what
+the token allows. `POST /api/voice/turn` saves one exchange. Both are owner-only and rate
+limited. Without `GEMINI_API_KEY` the button is not rendered at all.
+
+In the browser, `lib/voice/session-manager.ts` is the whole conversation: it owns the
+microphone, the player and the connection, and runs the states the window shows.
+
+| Piece | What it does |
+| --- | --- |
+| `public/voice/pcm-capture.worklet.js` | On the audio thread: float samples to 16-bit PCM at 16 kHz, 100 ms chunks, with the loudness. Muting zeroes samples here, so a muted microphone sends silence rather than nothing. |
+| `lib/voice/audio.ts` | One `AudioContext` each way. The player schedules each chunk after the last so speech is gapless, and `interrupt()` silences it instantly. |
+| `lib/voice/transport.ts` | The live connection, or a deterministic stand-in under `AI_MOCK=1` that hears loudness, answers with a tone and can be interrupted. |
+
+Turn-taking is the server's: audio streams continuously and its voice-activity detection
+decides when a turn ends. Barging in is not a special case, it is the provider's `interrupted`
+signal plus `interrupt()` on the player, so the voice stops mid-word. A dropped connection
+reconnects up to three times with the session-resumption handle, so the conversation continues
+rather than restarting; a `goAway` reconnects immediately. Three minutes of quiet ends the call
+rather than holding a microphone open. Only one conversation can be live at a time: a second
+attempt is refused instead of opening a second microphone stream, and `stop()` releases every
+track, node, context, timer and listener.
+
+The window (`components/voice/voice-assistant.tsx`) shows one state at a time: connecting,
+listening, thinking, speaking, reconnecting, blocked, unavailable. The orb is an animated image
+at `public/voice/orb.gif`, falling back to the G mark when the file is absent; the rings around
+it breathe with the room's loudness while listening, turn while thinking and pulse while
+speaking. Every animation is a CSS transform or opacity, and loudness reaches the page as one
+custom property written a few times a second, never as React state.
+
 ## Plugins
 
 `lib/plugins/catalog.ts` lists what exists. The three available plugins run inside

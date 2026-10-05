@@ -16,6 +16,8 @@ export interface AiRateLimits {
   uploadsByUser: RateLimiter;
   sourceFetchByUser: RateLimiter;
   transcribeByUser: RateLimiter;
+  voiceSessionsByUser: RateLimiter;
+  voiceTurnsByUser: RateLimiter;
   scheduleRunsByUser: RateLimiter;
   photoSearchByUser: RateLimiter;
   widgetByIp: RateLimiter;
@@ -40,6 +42,9 @@ export const aiRateLimits: AiRateLimits =
     uploadsByUser: createMemoryRateLimiter({ limit: 40, windowMs: HOUR }),
     sourceFetchByUser: createMemoryRateLimiter({ limit: 30, windowMs: HOUR }),
     transcribeByUser: createMemoryRateLimiter({ limit: 60, windowMs: HOUR }),
+    // A voice session is one connection; reconnects need headroom without allowing an open tap.
+    voiceSessionsByUser: createMemoryRateLimiter({ limit: 40, windowMs: HOUR }),
+    voiceTurnsByUser: createMemoryRateLimiter({ limit: 400, windowMs: HOUR }),
     scheduleRunsByUser: createMemoryRateLimiter({ limit: 30, windowMs: HOUR }),
     photoSearchByUser: createMemoryRateLimiter({ limit: 40, windowMs: 10 * MINUTE }),
     widgetByIp: createMemoryRateLimiter({ limit: 40 * ipScale(), windowMs: 10 * MINUTE }),
