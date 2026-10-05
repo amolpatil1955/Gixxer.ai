@@ -22,6 +22,15 @@ export type ActionResult = { ok: true } | ActionFailure;
 
 const GENERIC_FAILURE = "Something went wrong on our side. Please try again in a moment.";
 
+/**
+ * Starts the Google sign-in flow. Auth.js answers with a redirect to Google, which is thrown
+ * as a Next.js redirect, so this action never returns normally on success.
+ */
+export async function googleSignInAction(formData: FormData): Promise<void> {
+  const next = formData.get("next");
+  await signIn("google", { redirectTo: safeInternalPath(typeof next === "string" ? next : undefined) });
+}
+
 function fieldErrorsFrom(issues: { path: PropertyKey[]; message: string }[]): Record<string, string> {
   const errors: Record<string, string> = {};
   for (const issue of issues) {

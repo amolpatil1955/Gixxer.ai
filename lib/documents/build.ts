@@ -26,17 +26,48 @@ const BODY_SIZE = 11;
 const LEADING = 16;
 const CHARS_PER_LINE = 88;
 
-function pdfEscape(text: string): string {
-  // WinAnsi covers Latin-1; anything else becomes a plain question mark rather than garbage.
-  return [...text]
-    .map((char) => {
-      const code = char.charCodeAt(0);
-      if (char === "(" || char === ")" || char === "\\") return `\\${char}`;
-      if (code < 32) return "";
-      if (code > 255) return "?";
-      return code > 126 ? `\\${code.toString(8).padStart(3, "0")}` : char;
-    })
-    .join("");
+/*
+ * WinAnsi (cp1252) has slots for the typographic characters models write
+ * constantly — curly quotes, dashes, bullets, ellipses, the euro sign — which
+ * sit above U+00FF in Unicode. Mapping them here is what stops a generated
+ * PDF from reading "????" wherever the answer used a smart quote.
+ */
+const WINANSI: Record<string, number> = {
+  "\u20ac": 0x80, "\u201a": 0x82, "\u0192": 0x83, "\u201e": 0x84, "\u2026": 0x85, "\u2020": 0x86, "\u2021": 0x87,
+  "\u02c6": 0x88, "\u2030": 0x89, "\u0160": 0x8a, "\u2039": 0x8b, "\u0152": 0x8c, "\u017d": 0x8e, "\u2018": 0x91,
+  "\u2019": 0x92, "\u201c": 0x93, "\u201d": 0x94, "\u2022": 0x95, "\u2013": 0x96, "\u2014": 0x97, "\u02dc": 0x98,
+  "\u2122": 0x99, "\u0161": 0x9a, "\u203a": 0x9b, "\u0153": 0x9c, "\u017e": 0x9e, "\u0178": 0x9f,
+};
+
+/** Characters with no WinAnsi slot but an obvious plain-text stand-in. */
+const TRANSLITERATE: Record<string, string> = {
+  "\u00a0": " ", "\u2002": " ", "\u2003": " ", "\u2009": " ", "\u202f": " ", "\u2007": " ",
+  "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2212": "-", "\u2015": "-",
+  "\u2192": "->", "\u2190": "<-", "\u21d2": "=>", "\u2194": "<->",
+  "\u2713": "v", "\u2714": "v", "\u2717": "x", "\u2718": "x", "\u2605": "*", "\u2606": "*",
+  "\u25cf": "\u2022", "\u2219": "\u2022", "\u25e6": "\u2022", "\u25aa": "\u2022", "\u2023": "\u2022", "\u2043": "-",
+  "\u00d7": "x", "\u2264": "<=", "\u2265": ">=", "\u2260": "!=", "\u2248": "~",
+};
+
+function encodeChar(char: string): string {
+  const code = char.charCodeAt(0);
+  if (char === "(" || char === ")" || char === "\\") return `\\${char}`;
+  if (code < 32) return char === "\t" ? "  " : "";
+  if (code <= 126) return char;
+  if (code <= 255) return `\\${code.toString(8).padStart(3, "0")}`;
+  const slot = WINANSI[char];
+  if (slot !== undefined) return `\\${slot.toString(8).padStart(3, "0")}`;
+  const plain = TRANSLITERATE[char];
+  if (plain !== undefined) return [...plain].map(encodeChar).join("");
+  // Accented letters outside Latin-1 fold to their base letter; emoji and symbols are dropped.
+  const folded = char.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  if (folded !== char && [...folded].every((part) => part.charCodeAt(0) <= 255)) return [...folded].map(encodeChar).join("");
+  return "";
+}
+
+/** Text as a PDF literal string in WinAnsi, with typographic characters kept rather than replaced by "?". */
+export function pdfEscape(text: string): string {
+  return [...text.normalize("NFC")].map(encodeChar).join("");
 }
 
 function wrap(line: string, width: number): string[] {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { signOutEverywhereAction } from "@/lib/settings/actions";
@@ -8,9 +9,10 @@ import { SettingRow } from "./settings-dialog";
 
 export function SecuritySection({ user }: { user: ShellUser }) {
   const [pending, startTransition] = useTransition();
+  const { confirm, dialog } = useConfirm();
 
-  function signOutEverywhere() {
-    if (!window.confirm("Sign out on every device, including this one?")) return;
+  async function signOutEverywhere() {
+    if (!(await confirm({ title: "Sign out everywhere?", body: "Every session on every device ends, including this one.", confirmLabel: "Sign out", tone: "default" }))) return;
     startTransition(() => signOutEverywhereAction());
   }
 
@@ -26,6 +28,7 @@ export function SecuritySection({ user }: { user: ShellUser }) {
         </Button>
       </SettingRow>
       <SettingRow title="Password" description="Password changes and resets are not built yet. Sign out everywhere if you believe a session was compromised." />
+      {dialog}
     </div>
   );
 }

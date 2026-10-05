@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Check, Folder, MessageSquare, Pencil, SquarePen, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -22,6 +23,7 @@ export function ProjectView({ project, conversations }: { project: ProjectDto; c
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const nameInput = useRef<HTMLInputElement>(null);
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     if (editingName) nameInput.current?.select();
@@ -54,8 +56,8 @@ export function ProjectView({ project, conversations }: { project: ProjectDto; c
     });
   }
 
-  function remove() {
-    if (!window.confirm(`Delete "${project.name}"? Its chats are kept and become ordinary chats.`)) return;
+  async function remove() {
+    if (!(await confirm({ title: `Delete "${project.name}"?`, body: "Its chats are kept and become ordinary chats." }))) return;
     startTransition(async () => {
       const result = await deleteProjectAction({ projectId: project.id });
       if (result && !result.ok) setMessage({ tone: "error", text: result.message });
@@ -163,6 +165,7 @@ export function ProjectView({ project, conversations }: { project: ProjectDto; c
           </Panel>
         )}
       </section>
+      {dialog}
     </div>
   );
 }

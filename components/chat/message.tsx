@@ -10,7 +10,6 @@ import { ImageGenerating } from "@/components/images/image-generating";
 import { ArtifactCard } from "./artifact-card";
 import { GLoader } from "./g-loader";
 import { Markdown } from "./markdown";
-import { Thinking } from "./thinking";
 
 interface MessageProps {
   message: ThreadMessageDto;
@@ -162,13 +161,11 @@ export const ChatMessage = memo(function ChatMessage({ message, streaming, busy,
     );
   }
 
-  const thinking = streaming && !message.content;
   const making = message.working === "image" || message.working === "image-done";
-  const waiting = streaming && !message.content && !message.reasoning && message.artifacts.length === 0 && !making;
+  const waiting = streaming && !message.content && message.artifacts.length === 0 && !making;
 
   return (
     <div className="min-w-0" data-message-role="assistant" data-message-status={message.status}>
-      <Thinking reasoning={message.reasoning} thinking={thinking && Boolean(message.reasoning)} />
       {making ? (
         <ImageGenerating width={1024} height={768} progress={message.working === "image-done" ? 100 : undefined} className="mt-1 max-w-md" />
       ) : waiting ? (

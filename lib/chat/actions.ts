@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/session";
 import { getProject } from "@/lib/projects/repository";
 import { workspaceRoutes } from "@/lib/workspace/routes";
 import { deleteConversation, renameConversation, setConversationPinned, setConversationProject, setMessageFeedback } from "./repository";
+import { deleteConversationFiles } from "@/lib/files/service";
 import { switchBranch } from "./service";
 import { conversationIdSchema, feedbackSchema, moveSchema, pinSchema, renameSchema, switchBranchSchema } from "./validation";
 
@@ -64,7 +65,8 @@ export async function deleteConversationAction(input: unknown): Promise<ActionRe
   const parsed = conversationIdSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid input" };
   try {
-    await deleteConversation(user.id, parsed.data.conversationId);
+    const deleted = await deleteConversation(user.id, parsed.data.conversationId);
+    if (deleted) await deleteConversationFiles(user.id, parsed.data.conversationId);
   } catch (error) {
     console.error("[chat] delete failed", error instanceof Error ? error.message : error);
     return { ok: false, message: GENERIC };

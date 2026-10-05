@@ -8,6 +8,8 @@ import { Field, fieldAria } from "@/components/ui/field";
 import { Input, inputClassName } from "@/components/ui/input";
 import { updateAppearanceAction, updateBehaviorAction, updateInstructionsAction, updateSettingsAction, type ActionResult } from "@/lib/bots/actions";
 import { BOT_TONES, TONE_GUIDANCE, TONE_LABELS, WIDGET_POSITIONS, type BotTone, type WidgetPosition } from "@/lib/bots/constants";
+import { BOT_THEMES } from "@/lib/bots/themes";
+import { updateThemeAction } from "@/lib/bots/actions";
 import type { BotDto } from "@/lib/bots/types";
 import { cn } from "@/lib/utils/cn";
 
@@ -161,14 +163,42 @@ const SWATCHES = ["#030000", "#1f2937", "#0f766e", "#1d4ed8", "#7c3aed", "#b91c1
 
 export function AppearanceForm({ bot }: { bot: BotDto }) {
   const { save, pending, error, fieldErrors, saved } = useSave(updateAppearanceAction);
+  const theme = useSave(updateThemeAction);
   const [avatarLetter, setAvatarLetter] = useState(bot.avatarLetter);
   const [accent, setAccent] = useState(bot.theme.accent);
   const [position, setPosition] = useState<WidgetPosition>(bot.theme.position);
+  const [preset, setPreset] = useState(bot.theme.preset);
 
   return (
     <FormShell pending={pending} saved={saved} error={error} onSubmit={() => save({ botId: bot.id, avatarLetter, accent, position })}>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
+          <fieldset>
+            <legend className="text-[13px] font-medium text-ink-200">Theme</legend>
+            <p className="mt-1 text-[12.5px] text-ink-400">Each theme is a complete look. Choosing one saves it right away.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {BOT_THEMES.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  aria-pressed={preset === option.key}
+                  onClick={() => {
+                    setPreset(option.key);
+                    setAccent(option.light.accent);
+                    theme.save({ botId: bot.id, preset: option.key, position, accent: option.light.accent });
+                  }}
+                  className={cn(
+                    "flex items-center gap-2 rounded-full border px-3 py-1.5 text-[13px] transition-colors",
+                    preset === option.key ? "border-transparent bg-ink-50 text-ink-950" : "border-line-strong text-ink-200 hover:border-ink-400",
+                  )}
+                >
+                  <span className="size-3.5 rounded-full" style={{ background: option.light.accent }} aria-hidden="true" />
+                  {option.name}
+                </button>
+              ))}
+            </div>
+            {theme.error ? <p className="mt-1 text-[13px] text-danger">{theme.error}</p> : null}
+          </fieldset>
           <Field id="avatarLetter" label="Avatar letters" hint="One or two characters." error={fieldErrors.avatarLetter}>
             <Input id="avatarLetter" value={avatarLetter} onChange={(event) => setAvatarLetter(event.target.value.slice(0, 2))} maxLength={2} className="w-24 uppercase" />
           </Field>

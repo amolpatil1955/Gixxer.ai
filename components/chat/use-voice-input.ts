@@ -27,9 +27,40 @@ function preferredMime(): string | undefined {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type));
 }
 
+function errorName(error: unknown): string {
+  return typeof error === "object" && error !== null && "name" in error ? String((error as { name?: unknown }).name) : "";
+}
+
 function isPermissionError(error: unknown): boolean {
-  const name = typeof error === "object" && error !== null && "name" in error ? String((error as { name?: unknown }).name) : "";
+  const name = errorName(error);
   return name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError";
+}
+
+/** A plain reason for a microphone that would not start, for anything other than a refusal. */
+function startFailure(error: unknown): string {
+  switch (errorName(error)) {
+    case "NotFoundError":
+    case "DevicesNotFoundError":
+      return "No microphone was found. Plug one in or check your sound settings, then try again.";
+    case "NotReadableError":
+    case "TrackStartError":
+    case "AbortError":
+      return "The microphone is busy or blocked by the system. Close other apps using it, then try again.";
+    case "OverconstrainedError":
+      return "This microphone does not support recording here. Try another one.";
+    default:
+      return "The microphone could not be started. Please try again.";
+  }
+}
+
+/** Whether the browser has already been told "never" for this site. Unknown counts as not denied. */
+async function permissionDenied(): Promise<boolean> {
+  try {
+    const status = await navigator.permissions?.query({ name: "microphone" as PermissionName });
+    return status?.state === "denied";
+  } catch {
+    return false;
+  }
 }
 
 export function useVoiceInput(onTranscript: (text: string) => void) {
@@ -80,17 +111,26 @@ export function useVoiceInput(onTranscript: (text: string) => void) {
     setError(null);
     setSeconds(0);
     cancelled.current = false;
+    if (!window.isSecureContext) {
+      setState("unsupported");
+      setError("Voice input needs a secure connection. Open Gixxer over https to dictate.");
+      return;
+    }
     if (!canRecord()) {
       setState("unsupported");
       return;
     }
     setState("requesting");
+    if (await permissionDenied()) {
+      setState("denied");
+      return;
+    }
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     } catch (caught) {
       setState(isPermissionError(caught) ? "denied" : "error");
-      setError(isPermissionError(caught) ? null : "The microphone could not be started. Check that another app is not using it.");
+      setError(isPermissionError(caught) ? null : startFailure(caught));
       return;
     }
     if (cancelled.current) {

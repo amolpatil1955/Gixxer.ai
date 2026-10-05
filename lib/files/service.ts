@@ -2,7 +2,8 @@ import "server-only";
 import { deleteBlob, readBlob, storeBlob } from "@/lib/db/storage";
 import { extractFile } from "@/lib/knowledge/extract";
 import { deleteChunksForFile, indexSegments } from "@/lib/knowledge/index";
-import { createFile, deleteFileRecord, getFile, updateFileIndex, type FileRecord } from "./repository";
+import type { FileScope } from "@/lib/db/models/workspace.models";
+import { createFile, deleteFileRecord, getFile, listConversationFiles, updateFileIndex, type FileRecord } from "./repository";
 import { kindForName, MAX_UPLOAD_BYTES, safeFileName } from "./validation";
 
 export class UploadError extends Error {
@@ -50,7 +51,10 @@ function mimeFor(kind: string, declared: string): string {
 }
 
 /** Validates, stores and registers an upload. Indexing happens separately in `processFile`. */
-export async function uploadFile(userId: string, input: { name: string; mime: string; bytes: Buffer }): Promise<FileRecord> {
+export async function uploadFile(
+  userId: string,
+  input: { name: string; mime: string; bytes: Buffer; scope?: FileScope; conversationId?: string | null },
+): Promise<FileRecord> {
   const name = safeFileName(input.name);
   const kind = kindForName(name);
   if (!kind) throw new UploadError("That file type is not supported. Use PDF, DOCX, TXT, CSV, XLS, XLSX or an image.");
@@ -60,7 +64,7 @@ export async function uploadFile(userId: string, input: { name: string; mime: st
 
   const mime = mimeFor(kind, input.mime);
   const storageId = await storeBlob(input.bytes, { filename: name, contentType: mime });
-  return createFile(userId, { name, mime, size: input.bytes.length, kind, storageId });
+  return createFile(userId, { name, mime, size: input.bytes.length, kind, storageId, scope: input.scope ?? "library", conversationId: input.conversationId ?? null });
 }
 
 /** Extracts and indexes a stored file. Safe to call again: it replaces earlier chunks. */
@@ -70,6 +74,10 @@ export async function processFile(userId: string, fileId: string): Promise<void>
   try {
     const bytes = await readBlob(new (await import("mongoose")).Types.ObjectId(file.storageId));
     const extraction = await extractFile(file.kind, bytes);
+    if (extraction.unreadable) {
+      await updateFileIndex(userId, file.id, { status: "failed", pages: extraction.pages, chunkCount: 0, preview: "", error: extraction.unreadable });
+      return;
+    }
     const chunkCount = await indexSegments({ userId, fileId: file.id, sourceName: file.name }, extraction.segments);
     await updateFileIndex(userId, file.id, {
       status: "indexed",
@@ -83,6 +91,12 @@ export async function processFile(userId: string, fileId: string): Promise<void>
     console.error("[files] indexing failed", file.name, error instanceof Error ? error.message : error);
     await updateFileIndex(userId, file.id, { status: "failed", error: "We could not read this file. It may be encrypted or damaged." });
   }
+}
+
+/** Removes the files that belonged only to a deleted conversation. */
+export async function deleteConversationFiles(userId: string, conversationId: string): Promise<void> {
+  const files = await listConversationFiles(userId, conversationId);
+  for (const file of files) await deleteFile(userId, file.id).catch(() => false);
 }
 
 export async function deleteFile(userId: string, fileId: string): Promise<boolean> {

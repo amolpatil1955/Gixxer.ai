@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Check, Ellipsis, Folder, Pencil, Pin, PinOff, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -24,6 +25,7 @@ export function ChatHeader({ conversationId, title, pinned, project }: ChatHeade
   const [pending, startTransition] = useTransition();
   const root = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     if (editing) input.current?.select();
@@ -65,9 +67,9 @@ export function ChatHeader({ conversationId, title, pinned, project }: ChatHeade
     });
   }
 
-  function remove() {
+  async function remove() {
     setMenu(false);
-    if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    if (!(await confirm({ title: "Delete this chat?", body: `"${title}" and its files will be deleted. This cannot be undone.` }))) return;
     startTransition(async () => {
       await deleteConversationAction({ conversationId });
     });
@@ -157,6 +159,7 @@ export function ChatHeader({ conversationId, title, pinned, project }: ChatHeade
           </div>
         ) : null}
       </div>
+      {dialog}
     </div>
   );
 }

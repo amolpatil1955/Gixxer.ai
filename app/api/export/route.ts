@@ -14,7 +14,7 @@ export async function GET() {
   const [conversations, messages, files, images, projects, schedules, settings] = await Promise.all([
     listConversations(user.id, 5000),
     listAllMessages(user.id),
-    listFiles(user.id, 5000),
+    listFiles(user.id, { scopes: ["library", "chat", "bot"], limit: 5000 }),
     listImages(user.id, 5000),
     listProjects(user.id, 5000),
     listSchedules(user.id, 5000),
@@ -30,14 +30,12 @@ export async function GET() {
       ...conversation,
       messages: messages
         .filter((message) => message.conversationId === conversation.id)
-        .map(({ id, role, content, parentId, status, provider, reasoning, feedback, attachments, citations, createdAt }) => ({
+        .map(({ id, role, content, parentId, status, feedback, attachments, citations, createdAt }) => ({
           id,
           role,
           content,
           parentId,
           status,
-          provider,
-          reasoning,
           feedback,
           attachments,
           citations,

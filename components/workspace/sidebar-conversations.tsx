@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Check, ChevronRight, Ellipsis, Folder, Pencil, Pin, PinOff, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -21,6 +22,7 @@ function ConversationRow({ conversation, projects }: { conversation: Conversatio
   const [pending, startTransition] = useTransition();
   const input = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLLIElement>(null);
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     if (editing) input.current?.select();
@@ -80,9 +82,9 @@ function ConversationRow({ conversation, projects }: { conversation: Conversatio
     });
   }
 
-  function remove() {
+  async function remove() {
     setMenu(false);
-    if (!window.confirm(`Delete "${conversation.title}"? This cannot be undone.`)) return;
+    if (!(await confirm({ title: "Delete this chat?", body: `"${conversation.title}" and its files will be deleted. This cannot be undone.` }))) return;
     startTransition(async () => {
       await deleteConversationAction({ conversationId: conversation.id });
       router.refresh();
@@ -203,6 +205,7 @@ function ConversationRow({ conversation, projects }: { conversation: Conversatio
           )}
         </div>
       ) : null}
+      {dialog}
     </li>
   );
 }

@@ -2,52 +2,21 @@
 
 import { Bot, Plus } from "lucide-react";
 import Link from "next/link";
-import { useState, useTransition } from "react";
-import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { buttonClassName } from "@/components/ui/button";
 import { EmptyState } from "@/components/workspace/page-header";
-import { createBotAction } from "@/lib/bots/actions";
 import type { BotDto } from "@/lib/bots/types";
 import { workspaceRoutes } from "@/lib/workspace/routes";
 
 export function BotList({ bots }: { bots: BotDto[] }) {
-  const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  function create() {
-    setError(null);
-    startTransition(async () => {
-      const result = await createBotAction({ name });
-      // A successful action redirects to the new bot.
-      if (result && !result.ok) setError(result.message);
-    });
-  }
-
   return (
     <div className="space-y-8">
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          create();
-        }}
-        className="plate flex flex-col gap-3 rounded-2xl p-4 sm:flex-row sm:items-center"
-        aria-label="Create a chatbot"
-      >
-        <label htmlFor="bot-name" className="sr-only">
-          Bot name
-        </label>
-        <Input id="bot-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Name your bot, e.g. Aria" maxLength={60} disabled={pending} />
-        <Button type="submit" loading={pending} loadingLabel="Creating…" disabled={name.trim().length === 0} className="sm:min-w-40">
-          <Plus className="size-4" aria-hidden="true" />
-          Create bot
-        </Button>
-      </form>
-      {error ? <Alert>{error}</Alert> : null}
-
       {bots.length === 0 ? (
-        <EmptyState title="No chatbots yet" description="Create one, feed it your pages and files, then paste one script tag into your site." />
+        <EmptyState title="No chatbots yet" description="Create one, feed it your website or documents, then paste one script tag into your site.">
+          <Link href={workspaceRoutes.newChatbot} className={buttonClassName()}>
+            <Plus className="size-4" aria-hidden="true" />
+            Create a chatbot
+          </Link>
+        </EmptyState>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2" aria-label="Your chatbots">
           {bots.map((bot) => (

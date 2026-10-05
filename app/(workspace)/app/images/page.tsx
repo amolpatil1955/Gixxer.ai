@@ -10,9 +10,9 @@ export default async function ImagesPage() {
   const user = await requireUser();
   const images = await listImages(user.id);
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-10">
-      <PageTitle title="Images" className="mx-auto max-w-3xl" />
-      <div className="mt-5">
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pt-8 sm:px-8 sm:pt-10">
+      <PageTitle title="Images" />
+      <div className="mt-5 flex flex-1 flex-col">
         <ImageStudio
           initialImages={images.map((image) => ({
             id: image.id,

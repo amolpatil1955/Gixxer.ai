@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button, buttonClassName } from "@/components/ui/button";
@@ -10,9 +11,10 @@ export function DataSection() {
   const router = useRouter();
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
+  const { confirm, dialog } = useConfirm();
 
-  function deleteAll() {
-    if (!window.confirm("Delete every chat and message? Files, images, bots and projects stay. This cannot be undone.")) return;
+  async function deleteAll() {
+    if (!(await confirm({ title: "Delete every chat?", body: "All chats and messages are deleted. Files, images, bots and projects stay. This cannot be undone.", confirmLabel: "Delete all" }))) return;
     setMessage(null);
     startTransition(async () => {
       const result = await deleteAllConversationsAction();
@@ -45,6 +47,7 @@ export function DataSection() {
           {message.text}
         </p>
       ) : null}
+      {dialog}
     </div>
   );
 }

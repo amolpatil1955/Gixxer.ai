@@ -1,10 +1,12 @@
 import "server-only";
 import { Types } from "mongoose";
 import { connectToDatabase } from "@/lib/db/mongoose";
-import { FileModel, type FileKind, type FileStatus } from "@/lib/db/models/workspace.models";
+import { FileModel, type FileKind, type FileScope, type FileStatus } from "@/lib/db/models/workspace.models";
 
 export interface FileRecord {
   id: string;
+  scope: FileScope;
+  conversationId: string | null;
   name: string;
   mime: string;
   size: number;
@@ -21,6 +23,8 @@ export interface FileRecord {
 
 type LeanFile = {
   _id: Types.ObjectId;
+  scope?: FileScope;
+  conversationId?: Types.ObjectId | null;
   name: string;
   mime: string;
   size: number;
@@ -40,6 +44,8 @@ const oid = (id: string) => new Types.ObjectId(id);
 function toRecord(doc: LeanFile): FileRecord {
   return {
     id: doc._id.toString(),
+    scope: doc.scope ?? "library",
+    conversationId: doc.conversationId ? doc.conversationId.toString() : null,
     name: doc.name,
     mime: doc.mime,
     size: doc.size,
@@ -55,9 +61,35 @@ function toRecord(doc: LeanFile): FileRecord {
   };
 }
 
-export async function listFiles(userId: string, limit = 100): Promise<FileRecord[]> {
+/** Files in the given scopes, newest first. Files saved before scopes existed count as library files. */
+export async function listFiles(userId: string, options: { scopes?: FileScope[]; limit?: number } = {}): Promise<FileRecord[]> {
   await connectToDatabase();
-  const docs = await FileModel.find({ userId: oid(userId) }).sort({ createdAt: -1 }).limit(limit).lean<LeanFile[]>().exec();
+  const scopes = options.scopes ?? ["library", "chat"];
+  const scopeFilter = scopes.includes("library") ? { $or: [{ scope: { $in: scopes } }, { scope: { $exists: false } }] } : { scope: { $in: scopes } };
+  const docs = await FileModel.find({ userId: oid(userId), ...scopeFilter })
+    .sort({ createdAt: -1 })
+    .limit(options.limit ?? 100)
+    .lean<LeanFile[]>()
+    .exec();
+  return docs.map(toRecord);
+}
+
+/** Binds chat files that are not yet bound to a conversation. Library files are left alone. */
+export async function claimChatFiles(userId: string, conversationId: string, fileIds: string[]): Promise<void> {
+  const valid = fileIds.filter((id) => Types.ObjectId.isValid(id));
+  if (valid.length === 0) return;
+  await connectToDatabase();
+  await FileModel.updateMany(
+    { _id: { $in: valid.map(oid) }, userId: oid(userId), scope: "chat", conversationId: null },
+    { $set: { conversationId: oid(conversationId) } },
+  ).exec();
+}
+
+/** The chat files of one conversation, for clean-up when the conversation is deleted. */
+export async function listConversationFiles(userId: string, conversationId: string): Promise<FileRecord[]> {
+  if (!Types.ObjectId.isValid(conversationId)) return [];
+  await connectToDatabase();
+  const docs = await FileModel.find({ userId: oid(userId), scope: "chat", conversationId: oid(conversationId) }).lean<LeanFile[]>().exec();
   return docs.map(toRecord);
 }
 
@@ -82,11 +114,26 @@ export interface CreateFileInput {
   size: number;
   kind: FileKind;
   storageId: Types.ObjectId;
+  scope?: FileScope;
+  conversationId?: string | null;
 }
 
 export async function createFile(userId: string, input: CreateFileInput): Promise<FileRecord> {
   await connectToDatabase();
-  const doc = await FileModel.create({ ...input, userId: oid(userId), status: input.kind === "image" ? "indexed" : "indexing" });
+  const scope = input.scope ?? "library";
+  // A chatbot's upload is read by the bot's own source pipeline, so the file itself is never indexed.
+  const status: FileStatus = input.kind === "image" ? "indexed" : scope === "bot" ? "uploaded" : "indexing";
+  const doc = await FileModel.create({
+    name: input.name,
+    mime: input.mime,
+    size: input.size,
+    kind: input.kind,
+    storageId: input.storageId,
+    scope,
+    conversationId: input.conversationId ? oid(input.conversationId) : null,
+    userId: oid(userId),
+    status,
+  });
   return toRecord(doc.toObject() as LeanFile);
 }
 

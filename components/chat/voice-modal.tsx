@@ -19,7 +19,7 @@ interface VoiceModalProps {
 const TITLES: Record<Exclude<VoiceState, "idle">, string> = {
   requesting: "Allow the microphone",
   listening: "Listening",
-  transcribing: "Writing it down",
+  transcribing: "Processing",
   denied: "Microphone blocked",
   unsupported: "Voice is not available here",
   error: "Something went wrong",
@@ -106,7 +106,7 @@ export function VoiceModal({ state, error, seconds, maxSeconds, onStop, onRetry,
             <h2 id="voice-title" className="mt-4 text-[17px] font-semibold tracking-[-0.01em]">
               {TITLES[key]}
             </h2>
-            <p className="mx-auto mt-1.5 max-w-[320px] text-[13.5px] leading-relaxed text-white/65">{state === "error" && error ? error : BODIES[key]}</p>
+            <p className="mx-auto mt-1.5 max-w-[320px] text-[13.5px] leading-relaxed text-white/65">{(state === "error" || state === "unsupported") && error ? error : BODIES[key]}</p>
             {listening ? (
               <p className="mt-3 font-mono text-[13px] tabular-nums text-white/80" aria-live="polite">
                 {pad(Math.floor(seconds / 60))}:{pad(seconds % 60)} <span className="text-white/40">/ {pad(Math.floor(maxSeconds / 60))}:{pad(maxSeconds % 60)}</span>

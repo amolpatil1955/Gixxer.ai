@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { ArrowUp, CalendarClock, ExternalLink, LoaderCircle, Pause, Play, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -51,6 +52,7 @@ export function ScheduledView({ initialSchedules }: { initialSchedules: Schedule
   const [pending, startTransition] = useTransition();
   const [running, setRunning] = useState<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const { confirm, dialog } = useConfirm();
   const zone = browserZone();
 
   useEffect(() => {
@@ -107,8 +109,8 @@ export function ScheduledView({ initialSchedules }: { initialSchedules: Schedule
     });
   }
 
-  function remove(schedule: ScheduleDto) {
-    if (!window.confirm(`Delete "${schedule.name}"? Chats it already produced are kept.`)) return;
+  async function remove(schedule: ScheduleDto) {
+    if (!(await confirm({ title: `Delete "${schedule.name}"?`, body: "Chats it already produced are kept." }))) return;
     startTransition(async () => {
       const result = await deleteScheduleAction({ scheduleId: schedule.id });
       if (!result.ok) setError(result.message);
@@ -306,6 +308,7 @@ export function ScheduledView({ initialSchedules }: { initialSchedules: Schedule
           </ul>
         )}
       </section>
+      {dialog}
     </div>
   );
 }

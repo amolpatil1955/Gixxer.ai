@@ -93,7 +93,7 @@ test.describe("registration", () => {
     await expect(page).toHaveURL(/\/register$/);
   });
 
-  test("shows password strength feedback and the Google button is disabled", async ({ page }) => {
+  test("shows password strength feedback and offers Google sign-up", async ({ page }) => {
     await page.goto("/register");
     await page.getByLabel("Password", { exact: true }).fill("weak1234");
     await expect(page.getByText(/Password strength:/)).toContainText("Weak");
@@ -102,7 +102,7 @@ test.describe("registration", () => {
 
     const google = page.getByRole("button", { name: /Sign up with Google/ });
     await expect(google).toBeVisible();
-    await expect(google).toBeDisabled();
+    await expect(google).toBeEnabled();
   });
 });
 
@@ -138,7 +138,21 @@ test.describe("login", () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
-  test("toggles password visibility and keeps the Google button disabled", async ({ page }) => {
+  test("the Google button hands off to Google with our callback", async ({ page, baseURL }) => {
+    const providers = (await (await page.request.get("/api/auth/providers")).json()) as Record<string, { callbackUrl: string }>;
+    expect(providers.google?.callbackUrl).toBe(`${baseURL}/api/auth/callback/google`);
+    // The handoff is the redirect to Google itself; the real OAuth page is never completed here.
+    await page.route("https://accounts.google.com/**", (route) => route.fulfill({ status: 200, body: "google-stub" }));
+    await page.goto("/login?next=%2Fapp%2Fimages");
+    await page.getByRole("button", { name: /Continue with Google/ }).click();
+    await page.waitForURL(/^https:\/\/accounts\.google\.com\//, { timeout: 20_000 });
+    const target = new URL(page.url());
+    expect(target.searchParams.get("redirect_uri")).toBe(`${baseURL}/api/auth/callback/google`);
+    expect(target.searchParams.get("scope")).toContain("email");
+    expect(target.searchParams.get("prompt")).toBe("select_account");
+  });
+
+  test("toggles password visibility and keeps the Google button enabled", async ({ page }) => {
     await page.goto("/login");
     const password = page.getByLabel("Password", { exact: true });
     await password.fill("secret-1");
@@ -151,7 +165,7 @@ test.describe("login", () => {
 
     const google = page.getByRole("button", { name: /Continue with Google/ });
     await expect(google).toBeVisible();
-    await expect(google).toBeDisabled();
+    await expect(google).toBeEnabled();
   });
 
   test("locks an email after repeated failed attempts", async ({ page }) => {

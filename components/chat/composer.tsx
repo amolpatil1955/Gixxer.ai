@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Mic, Square, Zap } from "lucide-react";
+import { ArrowUp, Mic, Square } from "lucide-react";
 import { useEffect, useRef, useState, type Dispatch, type KeyboardEvent, type SetStateAction } from "react";
 import { MESSAGE_MAX_LENGTH } from "@/lib/chat/validation";
 import { cn } from "@/lib/utils/cn";
@@ -21,6 +21,7 @@ interface ComposerProps {
   boosterGlow?: boolean;
   autoFocus?: boolean;
   placeholder?: string;
+  conversationId?: string | null;
 }
 
 /** The flowing rim around the composer while Booster is activating or working. */
@@ -44,7 +45,7 @@ function BoosterRing() {
  * Think, the microphone and send on the right. Enter sends, Shift+Enter
  * breaks a line, and send becomes stop while a reply streams.
  */
-export function Composer({ onSend, onStop, streaming, disabled, attachments, onAttachmentsChange, think, onThinkChange, boosterGlow = false, autoFocus, placeholder }: ComposerProps) {
+export function Composer({ onSend, onStop, streaming, disabled, attachments, onAttachmentsChange, think, onThinkChange, boosterGlow = false, autoFocus, placeholder, conversationId = null }: ComposerProps) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -112,7 +113,7 @@ export function Composer({ onSend, onStop, streaming, disabled, attachments, onA
         className="block max-h-[220px] w-full resize-none bg-transparent px-2.5 py-1.5 text-[15.5px] leading-relaxed text-ink-50 outline-none placeholder:text-ink-400"
       />
       <div className="mt-1 flex items-center gap-1">
-        <AttachMenu onChange={onAttachmentsChange} disabled={disabled || streaming} onError={setError} />
+        <AttachMenu conversationId={conversationId} onChange={onAttachmentsChange} disabled={disabled || streaming} onError={setError} />
         <div className="ml-auto flex items-center gap-1">
           <button
             type="button"
@@ -125,21 +126,18 @@ export function Composer({ onSend, onStop, streaming, disabled, attachments, onA
               think ? "bg-accent-soft text-accent" : "text-ink-200 hover:bg-ink-700 hover:text-ink-50",
             )}
           >
-            <Zap className={cn("size-4", think && "fill-current")} aria-hidden="true" />
             Booster
           </button>
-          {voice.supported ? (
-            <button
-              type="button"
-              disabled={disabled || streaming}
-              onClick={() => void voice.start()}
-              aria-label="Dictate"
-              title="Dictate"
-              className="flex size-9 items-center justify-center rounded-full text-ink-200 transition-colors hover:bg-ink-700 hover:text-ink-50 disabled:opacity-40"
-            >
-              <Mic className="size-4.5" aria-hidden="true" />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            disabled={disabled || streaming}
+            onClick={() => void voice.start()}
+            aria-label="Dictate"
+            title="Dictate"
+            className="flex size-9 items-center justify-center rounded-full text-ink-200 transition-colors hover:bg-ink-700 hover:text-ink-50 disabled:opacity-40"
+          >
+            <Mic className="size-4.5" aria-hidden="true" />
+          </button>
           {streaming ? (
             <button type="button" onClick={onStop} aria-label="Stop generating" title="Stop" className="flex size-9 items-center justify-center rounded-full bg-ink-50 text-ink-950 transition-colors hover:bg-white">
               <Square className="size-3.5 fill-current" aria-hidden="true" />

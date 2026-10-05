@@ -12,10 +12,12 @@ export interface BotDto {
   businessInfo: string;
   instructions: string;
   tone: BotTone;
+  useCase: string;
   suggestedQuestions: string[];
-  theme: { accent: string; position: WidgetPosition };
+  theme: { accent: string; position: WidgetPosition; preset: string };
   behavior: { collectLeads: boolean; citeSources: boolean; knowledgeOnly: boolean };
   allowedOrigins: string[];
+  published: boolean;
   createdAt: string;
 }
 
@@ -24,10 +26,18 @@ export interface SourceDto {
   type: "file" | "url" | "text";
   name: string;
   url: string | null;
-  status: "indexing" | "indexed" | "failed";
+  /** pending and crawling are website sources waiting on the crawler. */
+  status: "pending" | "crawling" | "processing" | "indexing" | "indexed" | "failed";
   chunkCount: number;
+  pageCount: number;
+  title: string | null;
   error: string | null;
   createdAt: string;
+}
+
+/** True while a source is still being read, so the screen keeps polling. */
+export function sourceWorking(status: SourceDto["status"]): boolean {
+  return status === "pending" || status === "crawling" || status === "processing" || status === "indexing";
 }
 
 export interface PublicBotDto {
@@ -37,7 +47,8 @@ export interface PublicBotDto {
   welcomeMessage: string;
   businessName: string;
   suggestedQuestions: string[];
-  theme: { accent: string; position: WidgetPosition };
+  /** `radius` lets the launcher's iframe match the panel without shipping the palette. */
+  theme: { accent: string; position: WidgetPosition; preset: string; radius: number };
   collectLeads: boolean;
 }
 

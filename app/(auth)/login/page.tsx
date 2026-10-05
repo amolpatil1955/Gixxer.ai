@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AuthCard } from "@/components/auth/auth-card";
 import { LoginForm } from "@/components/auth/login-form";
+import { googleAuthStatus } from "@/lib/auth/auth";
 import { routes, safeInternalPath } from "@/lib/auth/routes";
 import { getSessionState } from "@/lib/auth/session";
 
@@ -28,6 +29,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     >
       <LoginForm
         nextPath={nextPath}
+        googleAvailable={googleAuthStatus().available}
         notice={
           reason === "expired"
             ? "Your session has expired. Please sign in again."

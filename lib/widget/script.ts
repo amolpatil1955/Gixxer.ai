@@ -35,7 +35,8 @@ export function widgetScript(origin: string): string {
   function applyConfig(c) {
     config = c;
     if (c && c.theme) {
-      button.style.background = c.theme.accent || "#030000";
+      button.style.background = c.theme.accent || "#2563eb";
+      if (typeof c.theme.radius === "number") frame.style.borderRadius = c.theme.radius + "px";
       if (c.theme.position === "left") { root.style.right = "auto"; root.style.left = "20px"; frame.style.right = "auto"; frame.style.left = "0"; }
     }
   }

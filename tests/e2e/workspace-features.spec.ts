@@ -47,7 +47,7 @@ async function openSettings(page: Page, item: string) {
 const assistantMessages = (page: Page) => page.locator("[data-message-role='assistant']");
 
 test.describe("chat features", () => {
-  test("Think mode streams the model's reasoning into a panel and keeps it after a reload", async ({ page }) => {
+  test("Booster answers without ever showing the model's reasoning", async ({ page }) => {
     await register(page, "Think Tester");
     await page.getByRole("button", { name: "Booster off" }).click();
     await expect(page.getByRole("button", { name: "Booster on" })).toBeVisible();
@@ -57,12 +57,11 @@ test.describe("chat features", () => {
     await expect(reply).toContainText("Mock reply to: How many legs");
     // The first turn of a new chat ends with a refresh that mounts the conversation page; wait for it.
     await expect(page.locator("[data-chat-header]")).toBeVisible({ timeout: 15_000 });
-    await reply.getByRole("button", { name: "Thought process" }).click();
-    await expect(reply.getByText("Thinking about: How many legs do three spiders have?")).toBeVisible();
-
+    await expect(page.getByRole("button", { name: "Thought process" })).toHaveCount(0);
+    await expect(page.getByText(/Thinking about:/)).toHaveCount(0);
     await page.reload();
-    await assistantMessages(page).first().getByRole("button", { name: "Thought process" }).click();
-    await expect(assistantMessages(page).first().getByText(/Thinking about:/)).toBeVisible();
+    await expect(assistantMessages(page).first()).toContainText("Mock reply to: How many legs");
+    await expect(page.getByText(/Thinking about:/)).toHaveCount(0);
   });
 
   test("feedback, pinning and the conversation menu", async ({ page }) => {
@@ -226,8 +225,9 @@ test.describe("scheduled prompts", () => {
     await expect(page.locator("[data-schedule-active]")).toHaveCount(0, { timeout: 10_000 });
     await page.getByRole("tab", { name: "Paused" }).click();
     await expect(page.locator("[data-schedule-active='false']")).toHaveCount(1);
-    page.once("dialog", (dialog) => dialog.accept());
     await page.locator("[data-schedule-active]").getByRole("button", { name: /Delete/ }).click();
+    // The app's own confirmation window, not the browser's.
+    await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
     await expect(page.getByText("Nothing scheduled yet")).toBeVisible({ timeout: 10_000 });
 
     // The cron endpoint is closed without a secret.
@@ -303,12 +303,15 @@ test.describe("generation inside the chat", () => {
     await card.click();
     const panel = page.getByRole("dialog", { name: /Preview of solar-panels-for-homeowners\.pdf/ });
     await expect(panel).toBeVisible();
-    await expect(panel).toContainText("Library");
-    await expect(panel.getByRole("article", { name: "Page 1 of 1" })).toContainText("Mock reply to: Create a PDF", { timeout: 15_000 });
+    // The PDF is drawn as it really looks, page by page.
+    const pageCanvas = panel.getByRole("img", { name: "Page 1 of 1" });
+    await expect(pageCanvas).toBeVisible({ timeout: 15_000 });
+    await expect(pageCanvas).toHaveAttribute("data-rendering", "false", { timeout: 15_000 });
     // Zoom lives in the chrome on wide screens only.
     if (await panel.getByLabel("Zoom").isVisible()) {
-      await panel.getByLabel("Zoom").selectOption("125");
-      await expect(panel.getByRole("article", { name: "Page 1 of 1" })).toHaveCSS("zoom", "1.25");
+      const before = (await pageCanvas.boundingBox())?.width ?? 0;
+      await panel.getByLabel("Zoom").selectOption("150");
+      await expect.poll(async () => (await pageCanvas.boundingBox())?.width ?? 0).toBeGreaterThan(before * 1.3);
     }
     await panel.getByRole("button", { name: "Close preview" }).click();
     await expect(panel).toHaveCount(0);

@@ -24,7 +24,7 @@ export default async function NewChatPage({ searchParams }: PageProps<"/app">) {
   const [settings, project, file] = await Promise.all([getSettings(user.id), projectId ? getProject(user.id, projectId) : null, attach ? getFile(user.id, attach) : null]);
 
   const initialAttachments: PendingAttachment[] = [];
-  if (file && file.kind !== "image") {
+  if (file && file.kind !== "image" && file.scope === "library") {
     initialAttachments.push({ fileId: file.id, name: file.name, status: file.status === "indexed" ? "indexed" : file.status === "failed" ? "failed" : "indexing" });
   }
   return (

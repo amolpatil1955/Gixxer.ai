@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { CircleAlert, Download, Ellipsis, FileSpreadsheet, FileText, ImageIcon, LayoutGrid, List, LoaderCircle, MessageSquare, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -14,6 +15,8 @@ import { workspaceRoutes } from "@/lib/workspace/routes";
 
 export interface FileDto {
   id: string;
+  /** `chat` files belong to one conversation and are not offered to other chats. */
+  scope: "library" | "chat" | "bot";
   name: string;
   size: number;
   kind: string;
@@ -84,6 +87,7 @@ export function LibraryView({ initialFiles }: { initialFiles: FileDto[] }) {
   const [menu, setMenu] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const input = useRef<HTMLInputElement>(null);
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     const busy = files.filter((file) => file.status === "indexing" || file.status === "uploaded");
@@ -150,9 +154,9 @@ export function LibraryView({ initialFiles }: { initialFiles: FileDto[] }) {
     void addFiles(event.dataTransfer.files);
   }
 
-  function remove(file: FileDto) {
+  async function remove(file: FileDto) {
     setMenu(null);
-    if (!window.confirm(`Delete ${file.name}? Chats that cite it keep their citations, but the file is gone.`)) return;
+    if (!(await confirm({ title: `Delete ${file.name}?`, body: "Chats that cite it keep their citations, but the file is gone." }))) return;
     startTransition(async () => {
       const result = await deleteFileAction({ fileId: file.id });
       if (result.ok) setFiles((current) => current.filter((item) => item.id !== file.id));
@@ -205,7 +209,11 @@ export function LibraryView({ initialFiles }: { initialFiles: FileDto[] }) {
   );
 
   const chatLink = (file: FileDto, className?: string) =>
-    file.kind !== "image" && file.status === "indexed" ? (
+    file.scope === "chat" ? (
+      <span className={cn("inline-flex h-6 items-center rounded-full border border-line px-2 font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-400", className)} title="This file belongs to the chat it was added to">
+        In a chat
+      </span>
+    ) : file.kind !== "image" && file.status === "indexed" ? (
       <Link href={`${workspaceRoutes.home}?attach=${file.id}`} className={cn("inline-flex h-8 items-center gap-1.5 rounded-full border border-line-strong bg-ink-900 px-3 text-[12px] text-ink-100 hover:border-ink-400", className)}>
         <MessageSquare className="size-3.5" aria-hidden="true" />
         Chat
@@ -363,6 +371,7 @@ export function LibraryView({ initialFiles }: { initialFiles: FileDto[] }) {
           <p className="text-[15px] font-medium text-ink-50">Drop to upload</p>
         </div>
       ) : null}
+      {dialog}
     </div>
   );
 }

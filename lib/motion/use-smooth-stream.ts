@@ -11,9 +11,9 @@ import { usePrefersReducedMotion } from "./use-prefers-reduced-motion";
  * all at once.
  */
 
-const BASE_CHARS_PER_SECOND = 42;
-const MAX_CHARS_PER_SECOND = 180;
-const FINISH_SECONDS = 1.2;
+const BASE_CHARS_PER_SECOND = 34;
+const MAX_CHARS_PER_SECOND = 140;
+const FINISH_SECONDS = 1.4;
 
 /** The end of the word (or line) that starts at or after `index`, so a reveal never stops mid-word. */
 function wordBoundary(text: string, index: number): number {
@@ -44,7 +44,7 @@ export function useSmoothStream(target: string, active: boolean): { text: string
           return value;
         }
         // Reading pace while the stream is live; once it has ended, whatever is left lands within a moment.
-        const rate = active ? Math.min(MAX_CHARS_PER_SECOND, BASE_CHARS_PER_SECOND + backlog * 0.35) : Math.max(MAX_CHARS_PER_SECOND, backlog / FINISH_SECONDS);
+        const rate = active ? Math.min(MAX_CHARS_PER_SECOND, BASE_CHARS_PER_SECOND + backlog * 0.25) : Math.max(MAX_CHARS_PER_SECOND, backlog / FINISH_SECONDS);
         carry.current += rate * seconds;
         if (carry.current < 1) return value;
         const next = Math.min(target.length, wordBoundary(target, value + Math.floor(carry.current)));

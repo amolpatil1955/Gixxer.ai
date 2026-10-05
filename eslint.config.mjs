@@ -13,6 +13,9 @@ const eslintConfig = defineConfig([
     "playwright-report/**",
     "test-results/**",
     "coverage/**",
+    // Vendored pdf.js build files served from /public; third-party code we do not author.
+    "public/pdf.worker.min.mjs",
+    "public/pdfjs/**",
   ]),
 ]);
 

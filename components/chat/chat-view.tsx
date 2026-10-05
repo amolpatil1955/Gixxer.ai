@@ -41,8 +41,6 @@ function draftMessage(partial: Partial<ThreadMessageDto> & { id: string; role: "
     content: "",
     parentId: null,
     status: "complete",
-    provider: null,
-    reasoning: "",
     feedback: null,
     attachments: [],
     citations: [],
@@ -267,9 +265,6 @@ export function ChatView({ conversationId, initialThread, greetingName, initialA
               }
               break;
             }
-            case "reasoning":
-              patch(assistantId, (message) => ({ ...message, reasoning: message.reasoning + event.text }));
-              break;
             case "token":
               patch(assistantId, (message) => ({ ...message, content: message.content + event.text }));
               break;
@@ -386,6 +381,7 @@ export function ChatView({ conversationId, initialThread, greetingName, initialA
       onThinkChange={changeThink}
       boosterGlow={boosterPulse || (think && streamingId !== null)}
       autoFocus
+      conversationId={liveId}
       placeholder={project ? `Ask anything in ${project.name}` : undefined}
     />
   );

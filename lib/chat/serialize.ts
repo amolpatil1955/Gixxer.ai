@@ -9,8 +9,6 @@ export function toThreadDto(messages: ThreadMessage[]): ThreadMessageDto[] {
     content: message.content,
     parentId: message.parentId,
     status: message.status,
-    provider: message.provider,
-    reasoning: message.reasoning,
     feedback: message.feedback,
     attachments: message.attachments,
     citations: message.citations,

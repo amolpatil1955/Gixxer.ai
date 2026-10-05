@@ -22,9 +22,12 @@ interface LibraryFile {
 }
 
 /** Uploads one file and returns its record, or throws with a message safe to show. */
-async function upload(file: File): Promise<{ id: string; name: string; status: string }> {
+async function upload(file: File, conversationId: string | null): Promise<{ id: string; name: string; status: string }> {
   const form = new FormData();
   form.append("file", file);
+  // A file dropped into a chat belongs to that chat, never to the library or another chat.
+  form.append("scope", "chat");
+  if (conversationId) form.append("conversationId", conversationId);
   const response = await fetch("/api/files", { method: "POST", body: form });
   if (!response.ok) throw new Error(await errorMessageFrom(response, "The upload failed."));
   const json = (await response.json()) as { file: { id: string; name: string; status: string } };
@@ -61,13 +64,15 @@ export function useAttachmentPolling(attachments: PendingAttachment[], onChange:
 }
 
 interface AttachMenuProps {
+  /** The chat the uploads belong to; null for a chat that has not started yet. */
+  conversationId: string | null;
   onChange: Dispatch<SetStateAction<PendingAttachment[]>>;
   disabled?: boolean;
   onError: (message: string | null) => void;
 }
 
 /** The composer's "+" button: upload from disk, or pick a file from the library. */
-export function AttachMenu({ onChange, disabled, onError }: AttachMenuProps) {
+export function AttachMenu({ conversationId, onChange, disabled, onError }: AttachMenuProps) {
   const input = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -100,7 +105,7 @@ export function AttachMenu({ onChange, disabled, onError }: AttachMenuProps) {
       const temporaryId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       onChange((current) => [...current, { fileId: temporaryId, name: file.name, status: "uploading" }]);
       try {
-        const record = await upload(file);
+        const record = await upload(file, conversationId);
         onChange((current) =>
           current.map((item) =>
             item.fileId === temporaryId ? { fileId: record.id, name: record.name, status: record.status === "indexed" ? "indexed" : "indexing" } : item,

@@ -2,13 +2,12 @@
 
 import { ChevronDown, ChevronLeft, ChevronRight, Download, Ellipsis, ExternalLink, LoaderCircle, Maximize2, Minimize2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { ArtifactDto } from "@/lib/chat/types";
 import { errorMessageFrom } from "@/lib/stream/ndjson-client";
 import { cn } from "@/lib/utils/cn";
-import { workspaceRoutes } from "@/lib/workspace/routes";
-import { artifactUrl } from "./artifact-card";
+import { artifactFormat, artifactUrl } from "./artifact-card";
+import { PdfViewer } from "./pdf-viewer";
 
 /*
  * The preview of a generated document, beside the chat. The chrome is the
@@ -21,7 +20,7 @@ import { artifactUrl } from "./artifact-card";
 
 type Preview =
   | { kind: "sheets"; sheets: { name: string; rows: string[][]; truncated: boolean }[] }
-  | { kind: "pages"; pageCount: number; pages: string[] }
+  | { kind: "pages"; pageCount: number; pages: string[]; textLayer?: boolean }
   | { kind: "text"; text: string }
   | { kind: "none" };
 
@@ -128,7 +127,7 @@ function Pages({ pages, pageCount, zoom }: { pages: string[]; pageCount: number;
         >
           {titled ? <h1 className="mb-4 text-center text-[24px] font-bold leading-tight tracking-tight">{title}</h1> : null}
           {body ? <pre className="whitespace-pre-wrap font-sans">{body}</pre> : null}
-          {!title && !body ? <p className="italic text-[#777]">This page has no text.</p> : null}
+          {!title && !body ? <p className="italic text-[#777]">This page has no readable text. It may be a scanned image; download the file to see it.</p> : null}
         </article>
       </div>
       {pageCount > 1 ? (
@@ -165,6 +164,7 @@ export function ArtifactPanel({ artifact, onClose }: ArtifactPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const [menu, setMenu] = useState(false);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [pdfFailed, setPdfFailed] = useState(false);
   const menuRoot = useRef<HTMLDivElement>(null);
 
   // A new artifact starts from a clean slate. Adjusted during render, as React recommends.
@@ -174,6 +174,7 @@ export function ArtifactPanel({ artifact, onClose }: ArtifactPanelProps) {
     setError(null);
     setSheet(0);
     setMenu(false);
+    setPdfFailed(false);
   }
 
   useEffect(() => {
@@ -235,9 +236,7 @@ export function ArtifactPanel({ artifact, onClose }: ArtifactPanelProps) {
           >
             <header className="flex h-12 shrink-0 items-center gap-1 border-b border-white/10 pl-4 pr-2">
               <p className="min-w-0 flex-1 truncate text-[13px]">
-                <Link href={workspaceRoutes.library} className="text-white/55 hover:text-white">
-                  Library
-                </Link>
+                <span className="text-white/55">Gixxer</span>
                 <span className="mx-1.5 text-white/35">/</span>
                 <span className="text-white">{artifact.name}</span>
               </p>
@@ -262,9 +261,6 @@ export function ArtifactPanel({ artifact, onClose }: ArtifactPanelProps) {
                       <ExternalLink className="size-3.5" aria-hidden="true" />
                       Open in a new tab
                     </a>
-                    <Link href={workspaceRoutes.library} role="menuitem" className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] text-white/90 hover:bg-white/10">
-                      Show in Library
-                    </Link>
                   </div>
                 ) : null}
               </div>
@@ -279,7 +275,9 @@ export function ArtifactPanel({ artifact, onClose }: ArtifactPanelProps) {
               </button>
             </header>
 
-            {error ? (
+            {artifactFormat(artifact) === "pdf" && !pdfFailed ? (
+              <PdfViewer key={artifact.refId} url={artifactUrl(artifact)} zoom={zoom} onFailure={() => setPdfFailed(true)} />
+            ) : error ? (
               <p role="alert" className="px-5 py-6 text-[13px] text-[#ff8a8a]">
                 {error}
               </p>

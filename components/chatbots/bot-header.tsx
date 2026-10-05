@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { ExternalLink, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -16,6 +17,7 @@ export function BotHeader({ bot }: { bot: BotDto }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirm();
 
   function toggleStatus() {
     setError(null);
@@ -26,8 +28,8 @@ export function BotHeader({ bot }: { bot: BotDto }) {
     });
   }
 
-  function remove() {
-    if (!window.confirm(`Delete ${bot.name}, its knowledge, conversations and leads? This cannot be undone.`)) return;
+  async function remove() {
+    if (!(await confirm({ title: `Delete ${bot.name}?`, body: "Its knowledge, conversations and leads are deleted too. This cannot be undone." }))) return;
     startTransition(async () => {
       const result = await deleteBotAction({ botId: bot.id });
       if (result && !result.ok) setError(result.message);
@@ -87,6 +89,7 @@ export function BotHeader({ bot }: { bot: BotDto }) {
           </ul>
         </nav>
       </div>
+      {dialog}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import "server-only";
 import { Types } from "mongoose";
 import { embedTexts } from "@/lib/ai/manager";
 import { connectToDatabase } from "@/lib/db/mongoose";
-import { ChunkModel } from "@/lib/db/models/workspace.models";
+import { ChunkModel, FileModel, MessageModel } from "@/lib/db/models/workspace.models";
 import type { Segment } from "./chunk";
 import { rankChunks, type Candidate, type Ranked } from "./retrieve";
 
@@ -60,6 +60,20 @@ export async function deleteChunksForBot(userId: string, botId: string): Promise
   await ChunkModel.deleteMany({ userId: new Types.ObjectId(userId), botId: new Types.ObjectId(botId) });
 }
 
+/**
+ * The files "search everything" may read: library files only, never a chat's attachments or
+ * generated documents, and never a bot's uploads. Documents generated in a chat before files
+ * had scopes are recognised by the message that produced them and left out too.
+ */
+async function libraryScopeIds(owner: Types.ObjectId): Promise<Types.ObjectId[]> {
+  const [library, generated] = await Promise.all([
+    FileModel.distinct("_id", { userId: owner, $or: [{ scope: "library" }, { scope: { $exists: false } }] }).exec() as Promise<Types.ObjectId[]>,
+    MessageModel.distinct("artifacts.refId", { userId: owner, "artifacts.kind": "file" }).exec() as Promise<Types.ObjectId[]>,
+  ]);
+  const excluded = new Set(generated.map((id) => id.toString()));
+  return library.filter((id) => !excluded.has(id.toString()));
+}
+
 /** Which chunks to search: some files, every file in the library, or one bot's knowledge. */
 export type RetrievalScope = { fileIds: string[] } | { allFiles: true } | { botId: string };
 
@@ -73,13 +87,13 @@ const MAX_CANDIDATES = 1500;
 export async function retrieveChunks(userId: string, scope: RetrievalScope, question: string, k = 6): Promise<Ranked[]> {
   await connectToDatabase();
   const owner = new Types.ObjectId(userId);
+  if ("fileIds" in scope && scope.fileIds.length === 0) return [];
   const filter =
     "botId" in scope
       ? { userId: owner, botId: new Types.ObjectId(scope.botId) }
       : "allFiles" in scope
-        ? { userId: owner, fileId: { $ne: null }, botId: null }
+        ? { userId: owner, fileId: { $in: await libraryScopeIds(owner) }, botId: null }
         : { userId: owner, fileId: { $in: scope.fileIds.map((id) => new Types.ObjectId(id)) }, botId: null };
-  if ("fileIds" in scope && scope.fileIds.length === 0) return [];
 
   const docs = await ChunkModel.find(filter).limit(MAX_CANDIDATES).lean().exec();
   if (docs.length === 0) return [];

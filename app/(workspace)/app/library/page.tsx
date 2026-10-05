@@ -16,6 +16,7 @@ export default async function LibraryPage() {
         <LibraryView
           initialFiles={files.map((file) => ({
             id: file.id,
+            scope: file.scope,
             name: file.name,
             size: file.size,
             kind: file.kind,

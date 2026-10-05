@@ -74,28 +74,30 @@ export const SHEET_MAX_ROWS = 4000;
  * exact range so an answer can cite "Sheet!A2:D21".
  */
 export function chunkSheet(sheetName: string, rows: string[][]): Segment[] {
-  const trimmed = rows.map((row) => row.map((cell) => String(cell ?? "").trim()));
-  const nonEmpty = trimmed.filter((row) => row.some((cell) => cell !== ""));
-  if (nonEmpty.length === 0) return [];
-  const header = nonEmpty[0] ?? [];
-  const body = nonEmpty.slice(1, 1 + SHEET_MAX_ROWS);
-  const width = Math.max(header.length, ...body.map((row) => row.length), 1);
+  // Each row keeps its number in the sheet (1-based), so a blank row never shifts a citation.
+  const numbered = rows
+    .map((row, index) => ({ cells: row.map((cell) => String(cell ?? "").trim()), number: index + 1 }))
+    .filter((row) => row.cells.some((cell) => cell !== ""));
+  if (numbered.length === 0) return [];
+  const headerRow = numbered[0]!;
+  const header = headerRow.cells;
+  const body = numbered.slice(1, 1 + SHEET_MAX_ROWS);
+  const width = Math.max(header.length, ...body.map((row) => row.cells.length), 1);
   const lastColumn = columnLetter(width - 1);
   const segments: Segment[] = [];
 
   if (body.length === 0) {
-    return [{ text: `${sheetName}\n${header.join(" | ")}`, locator: `${sheetName}!A1:${lastColumn}1` }];
+    return [{ text: `${sheetName}\n${header.join(" | ")}`, locator: `${sheetName}!A${headerRow.number}:${lastColumn}${headerRow.number}` }];
   }
 
   for (let start = 0; start < body.length; start += SHEET_ROWS_PER_CHUNK) {
     const window = body.slice(start, start + SHEET_ROWS_PER_CHUNK);
-    const lines = window.map((row, offset) => {
-      const rowNumber = start + offset + 2; // 1-based, after the header
-      const cells = row.map((cell, column) => `${header[column] || columnLetter(column)}: ${cell}`).filter((cell) => !cell.endsWith(": "));
-      return `Row ${rowNumber}: ${cells.join(" | ")}`;
+    const lines = window.map((row) => {
+      const cells = row.cells.map((cell, column) => `${header[column] || columnLetter(column)}: ${cell}`).filter((cell) => !cell.endsWith(": "));
+      return `Row ${row.number}: ${cells.join(" | ")}`;
     });
-    const firstRow = start + 2;
-    const lastRow = start + window.length + 1;
+    const firstRow = window[0]!.number;
+    const lastRow = window[window.length - 1]!.number;
     segments.push({
       text: `Sheet ${sheetName}, columns: ${header.filter(Boolean).join(", ")}\n${lines.join("\n")}`,
       locator: `${sheetName}!A${firstRow}:${lastColumn}${lastRow}`,

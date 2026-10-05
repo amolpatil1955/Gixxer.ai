@@ -9,6 +9,7 @@ import { BotModel, BotSourceModel, ChunkModel, ConversationModel, FileModel, Mes
 import { getFile, listFiles } from "@/lib/files/repository";
 import { processFile, uploadFile } from "@/lib/files/service";
 import { retrieveChunks } from "@/lib/knowledge/index";
+import { applyPlugins } from "@/lib/plugins/apply";
 
 /**
  * Integration tests against a real MongoDB (see tests/setup/env.ts). They
@@ -76,6 +77,58 @@ describe.runIf(dbAvailable)("tenant isolation (MongoDB)", () => {
     expect(text).toContain("using 1 source");
     const citations = events.find((event) => event.type === "citations");
     expect(citations?.type === "citations" && citations.items[0]?.fileName).toBe("policy.txt");
+  });
+
+  it("keeps a chat's files inside that chat, out of the library and out of other chats", async () => {
+    // One file in the library, one attached to a chat. Both belong to Alice.
+    const shared = await uploadFile(alice, { name: "handbook.txt", mime: "text/plain", bytes: Buffer.from("Everyone gets 25 days of paid leave each year.") });
+    await processFile(alice, shared.id);
+    const first = await createConversation(alice, "First chat");
+    const private_ = await uploadFile(alice, {
+      name: "offer.txt",
+      mime: "text/plain",
+      bytes: Buffer.from("The acquisition price discussed with Northwind is 4.2 million euro."),
+      scope: "chat",
+      conversationId: first.id,
+    });
+    await processFile(alice, private_.id);
+
+    // The library listing and the library-wide plugin only ever see the library file.
+    expect((await listFiles(alice, { scopes: ["library"] })).map((file) => file.name)).toEqual(["handbook.txt"]);
+    const retrieved = await retrieveChunks(alice, { allFiles: true }, "acquisition price Northwind");
+    expect(retrieved.map((chunk) => chunk.sourceName)).not.toContain("offer.txt");
+    const plugins = await applyPlugins(["library"], { userId: alice, question: "What is the acquisition price?", excludeFileIds: [] });
+    expect(plugins.system.join(" ")).not.toContain("4.2 million");
+
+    // Attaching it to a different chat is refused, so it cannot be carried across.
+    const second = await createConversation(alice, "Second chat");
+    await expect(
+      (async () => {
+        // The generator rejects on its first event, before anything is written.
+        const turn = runTurn(alice, { kind: "send", conversationId: second.id, content: "What was the price?", attachmentIds: [private_.id], think: false }, new AbortController().signal);
+        await turn.next();
+      })(),
+    ).rejects.toThrow(/another chat/);
+
+    // In its own chat it still answers.
+    const events = [];
+    for await (const event of runTurn(alice, { kind: "send", conversationId: first.id, content: "What was the price?", attachmentIds: [private_.id], think: false }, new AbortController().signal)) events.push(event);
+    expect(events.find((event) => event.type === "done")).toEqual({ type: "done", status: "complete" });
+    expect(events.filter((event) => event.type === "citations").length).toBe(1);
+  });
+
+  it("keeps a generated document in the chat that made it", async () => {
+    const events = [];
+    for await (const event of runTurn(alice, { kind: "send", content: "Create a PDF about warehouse safety", attachmentIds: [], think: false }, new AbortController().signal)) events.push(event);
+    const artifact = events.find((event) => event.type === "artifact");
+    expect(artifact?.type).toBe("artifact");
+    const made = artifact?.type === "artifact" ? artifact.item : null;
+    expect(made?.kind).toBe("file");
+    // It is a file of that chat, not of the library, so the library-wide plugin never reads it.
+    const record = made ? await getFile(alice, made.refId) : null;
+    expect(record?.scope).toBe("chat");
+    expect(record?.conversationId).not.toBeNull();
+    expect((await listFiles(alice, { scopes: ["library"] })).map((file) => file.id)).not.toContain(made?.refId);
   });
 
   it("keeps bots, their knowledge and their public key to their owner", async () => {

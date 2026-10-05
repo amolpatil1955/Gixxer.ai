@@ -53,7 +53,9 @@ describe("content security policy", () => {
     expect(csp).toContain("base-uri 'self'");
     expect(csp).toContain("form-action 'self'");
     expect(csp).toContain("upgrade-insecure-requests");
-    expect(csp).not.toContain("unsafe-eval");
+    // WebAssembly compilation is allowed for the PDF viewer; eval() of a string is not.
+    expect(csp).toContain("'wasm-unsafe-eval'");
+    expect(csp).not.toContain(" 'unsafe-eval'");
   });
 
   it("only relaxes eval and websocket rules in development", () => {

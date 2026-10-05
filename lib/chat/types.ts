@@ -33,9 +33,6 @@ export interface ThreadMessageDto {
   content: string;
   parentId: string | null;
   status: MessageStatusDto;
-  provider: string | null;
-  /** The model's thinking, when the turn ran in Think mode. */
-  reasoning: string;
   feedback: FeedbackDto | null;
   attachments: AttachmentDto[];
   citations: CitationDto[];
@@ -61,7 +58,6 @@ export interface ConversationDto {
 /** Wire events from POST /api/chat, one JSON object per line. */
 export type ChatWireEvent =
   | { type: "meta"; conversationId: string; userMessageId: string; assistantMessageId: string; title: string }
-  | { type: "reasoning"; text: string }
   | { type: "token"; text: string }
   | { type: "citations"; items: CitationDto[] }
   | { type: "artifact"; item: ArtifactDto }

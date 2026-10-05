@@ -14,10 +14,12 @@ export function toBotDto(bot: BotRecord): BotDto {
     businessInfo: bot.businessInfo,
     instructions: bot.instructions,
     tone: bot.tone,
+    useCase: bot.useCase,
     suggestedQuestions: bot.suggestedQuestions,
     theme: bot.theme,
     behavior: bot.behavior,
     allowedOrigins: bot.allowedOrigins,
+    published: bot.publishedAt !== null,
     createdAt: bot.createdAt.toISOString(),
   };
 }
@@ -30,6 +32,8 @@ export function toSourceDto(source: SourceRecord): SourceDto {
     url: source.url,
     status: source.status,
     chunkCount: source.chunkCount,
+    pageCount: source.pageCount,
+    title: source.title,
     error: source.error,
     createdAt: source.createdAt.toISOString(),
   };

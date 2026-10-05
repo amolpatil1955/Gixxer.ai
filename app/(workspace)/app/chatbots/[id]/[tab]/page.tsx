@@ -6,6 +6,7 @@ import { Analytics, Conversations, Embed, Leads, Overview } from "@/components/c
 import { requireUser } from "@/lib/auth/session";
 import { botAnalytics, getBot, listBotConversations, listLeads, listSources } from "@/lib/bots/repository";
 import { toBotDto, toSourceDto } from "@/lib/bots/serialize";
+import { firecrawlConfigured } from "@/lib/crawl/firecrawl";
 import { getEnv } from "@/lib/env";
 import { listFiles } from "@/lib/files/repository";
 import { BOT_TAB_LABELS, isBotTab } from "@/lib/workspace/routes";
@@ -43,10 +44,11 @@ export default async function BotTabPage({ params }: PageProps<"/app/chatbots/[i
     case "instructions":
       return <InstructionsForm bot={bot} />;
     case "knowledge": {
-      const [sources, files] = await Promise.all([listSources(user.id, id), listFiles(user.id)]);
+      const [sources, files] = await Promise.all([listSources(user.id, id), listFiles(user.id, { scopes: ["library"] })]);
       return (
         <BotKnowledge
           botId={id}
+          crawlingAvailable={firecrawlConfigured()}
           sources={sources.map(toSourceDto)}
           libraryFiles={files.filter((file) => file.kind !== "image" && file.status === "indexed").map((file) => ({ id: file.id, name: file.name }))}
         />

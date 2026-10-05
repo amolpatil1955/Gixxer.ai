@@ -141,27 +141,46 @@ test.describe("images", () => {
 test.describe("chatbot pro and the widget", () => {
   test("builds a bot, goes live, and a visitor chats and leaves a lead", async ({ page, browser, baseURL }) => {
     await register(page, "Bot Owner");
-    await page.goto("/app/chatbots");
-    await page.getByLabel("Bot name").fill("Aria");
-    await page.getByRole("button", { name: "Create bot" }).click();
-    await expect(page).toHaveURL(/\/app\/chatbots\/[a-f0-9]{24}\/knowledge$/);
+    // The wizard: name, use case, knowledge, training, theme, publish.
+    await page.goto("/app/chatbots/new");
+    await page.getByLabel("What should the chatbot be called?").fill("Aria");
+    await page.getByLabel("Your business name").fill("Northwind Cycles");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("button", { name: /Customer support/ })).toBeVisible();
+    await page.getByRole("button", { name: /Customer support/ }).click();
+    await page.getByRole("button", { name: "Continue" }).click();
 
-    // Knowledge from pasted text is indexed immediately.
-    await page.getByRole("tab", { name: "Text" }).click();
+    // Knowledge: details typed by hand are read at once.
+    await expect(page.getByRole("tab", { name: "Add details manually" })).toBeVisible();
+    await page.getByRole("tab", { name: "Add details manually" }).click();
     await page.getByLabel("Name").fill("Hours");
-    await page.getByLabel("Text").fill("We are open 9am to 6pm Monday to Saturday. Sunday we are closed.");
+    await page.getByLabel("Details").fill("We are open 9am to 6pm Monday to Saturday. Sunday we are closed.");
     await page.getByRole("button", { name: "Add to knowledge" }).click();
     await expect(page.locator("[data-source-status='indexed']").filter({ hasText: "Hours" })).toBeVisible({ timeout: 15_000 });
 
-    // Private addresses are refused as knowledge.
-    await page.getByRole("tab", { name: "Web page" }).click();
-    await page.getByLabel("Page address").fill("http://127.0.0.1:9/secret");
-    await page.getByRole("button", { name: "Add to knowledge" }).click();
+    // A private address is refused before any crawl starts.
+    await page.getByRole("tab", { name: "Website URL" }).click();
+    await page.getByLabel("Website address").fill("http://127.0.0.1:9/secret");
+    await page.getByRole("button", { name: "Start crawling" }).click();
     await expect(page.getByRole("alert").filter({ hasText: "not reachable from here" }).first()).toBeVisible();
 
-    // Draft bots are invisible to the public.
-    await page.getByRole("link", { name: "Embed" }).click();
-    const publicKey = (await page.locator("code", { hasText: /^gx_/ }).first().textContent()) ?? "";
+    // A public site is crawled, then its pages are indexed.
+    await page.getByLabel("Website address").fill("https://northwind.example");
+    await page.getByRole("button", { name: "Start crawling" }).click();
+    await expect(page.locator("[data-source-status='indexed']").filter({ hasText: "northwind.example" })).toBeVisible({ timeout: 30_000 });
+
+    // Training reports what was learned, then the theme step previews the widget.
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByText("Training complete")).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("button", { name: /Midnight/ })).toBeVisible();
+    await page.getByRole("button", { name: /Midnight/ }).click();
+    await expect(page.locator("[data-widget-preview]").first()).toBeVisible();
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    // Publish: the key exists but the public widget stays hidden until it goes live.
+    await expect(page.getByText("Ready to go live")).toBeVisible({ timeout: 15_000 });
+    const publicKey = (await page.locator("code", { hasText: /^<script/ }).first().textContent())?.match(/gx_[A-Za-z0-9_-]+/)?.[0] ?? "";
     expect(publicKey).toMatch(/^gx_/);
     expect((await page.request.get(`/api/widget/${publicKey}/config`)).status()).toBe(404);
 
@@ -186,12 +205,15 @@ test.describe("chatbot pro and the widget", () => {
     const visitorContext = await browser.newContext({ baseURL });
     const visitor = await visitorContext.newPage();
     await visitor.goto(`/embed/${publicKey}?host=${encodeURIComponent("https://shop.example")}`);
-    await expect(visitor.getByText("Hi! How can I help?")).toBeVisible();
-    await visitor.getByRole("button", { name: "What do you offer?" }).click();
-    await expect(visitor.getByText("Mock reply to: What do you offer?")).toBeVisible({ timeout: 20_000 });
+    await expect(visitor.getByText(/If you need any assistance/)).toBeVisible();
+    await visitor.getByRole("button", { name: "What are your hours?" }).click();
+    await expect(visitor.getByText("Mock reply to: What are your hours?")).toBeVisible({ timeout: 20_000 });
     await visitor.getByRole("textbox", { name: "Your message" }).fill("When are you open on Sunday?");
     await visitor.getByRole("button", { name: "Send" }).click();
-    await expect(visitor.getByText("Mock reply to: When are you open on Sunday? (using 1 source: [source: Hours · part 1])")).toBeVisible({ timeout: 20_000 });
+    // The bot knows the typed hours and the crawled site, so it may cite either; the hours must be among them.
+    const answer = visitor.getByText(/Mock reply to: When are you open on Sunday\?/);
+    await expect(answer).toBeVisible({ timeout: 20_000 });
+    await expect(answer).toContainText("[source: Hours · part 1]");
 
     await visitor.getByRole("button", { name: "Contact" }).click();
     await visitor.getByLabel("Your name").fill("Sam Visitor");
@@ -202,8 +224,10 @@ test.describe("chatbot pro and the widget", () => {
     await visitorContext.close();
 
     // The owner sees the conversation, the lead and the analytics.
+    await page.getByRole("link", { name: "Go to the dashboard" }).click();
+    await expect(page).toHaveURL(/\/app\/chatbots\/[a-f0-9]{24}\/overview$/);
     await page.getByRole("link", { name: "Conversations" }).click();
-    await expect(page.getByText("What do you offer?", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("What are your hours?", { exact: true }).first()).toBeVisible();
     await page.getByRole("link", { name: "Leads" }).click();
     await expect(page.getByRole("cell", { name: "Sam Visitor" })).toBeVisible();
     await expect(page.getByRole("link", { name: "sam@example.com" })).toBeVisible();
@@ -233,11 +257,16 @@ test.describe("tenant isolation over HTTP", () => {
     await page.locator("input[type=file]").setInputFiles({ name: "private.txt", mimeType: "text/plain", buffer: Buffer.from("owner only content") });
     await expect(page.locator("[data-file-status='indexed']").filter({ hasText: "private.txt" })).toBeVisible({ timeout: 20_000 });
     const fileHref = await page.getByRole("link", { name: "private.txt" }).getAttribute("href");
+    await page.goto("/app/chatbots/new");
+    await page.getByLabel("What should the chatbot be called?").fill("Private bot");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("button", { name: /Customer support/ })).toBeVisible();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("tab", { name: "Website URL" })).toBeVisible({ timeout: 15_000 });
     await page.goto("/app/chatbots");
-    await page.getByLabel("Bot name").fill("Private bot");
-    await page.getByRole("button", { name: "Create bot" }).click();
-    await expect(page).toHaveURL(/\/app\/chatbots\/[a-f0-9]{24}\/knowledge$/);
-    const botUrl = page.url();
+    // The bot's own card, not the "New chatbot" link in the header.
+    const botUrl = (await page.getByRole("list", { name: "Your chatbots" }).getByRole("link").first().getAttribute("href")) ?? "";
+    expect(botUrl).toMatch(/\/app\/chatbots\/[a-f0-9]{24}/);
     await logout(page);
 
     await register(page, "Other Person");

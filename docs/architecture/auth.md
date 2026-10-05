@@ -160,11 +160,13 @@ to hide its user list.
 **Sign-in reveals nothing.** A wrong password and an unknown email return exactly the same
 message and take roughly the same time.
 
-**Google sign-in is configured but disabled in the UI.** The button is in its final position
-so the layout does not move later, and it is a real `disabled` button with no handler. The
+**Google sign-in is on.** The button is a plain form posting to the `googleSignInAction`
+server action, which calls `signIn("google")` and lands on the validated `next` path. The
 provider is only mounted when both `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` are present
-*and* `GOOGLE_SIGN_IN_ENABLED` (`lib/auth/features.ts`) is true, so the sign-in endpoint is
-unreachable while the button is off. Everything else is ready:
+*and* `GOOGLE_SIGN_IN_ENABLED` (`lib/auth/features.ts`) is true; the auth pages compute
+`googleAuthStatus().available` server-side and render the button disabled with a short note
+when the provider is missing, so a deployment without the secrets degrades cleanly. The
+provider asks Google for `select_account` so the account chooser always appears.
 
 - The callback Auth.js answers on is `<origin>/api/auth/callback/google`. It must be
   registered on the Google OAuth client for every origin the app runs on, currently
@@ -177,8 +179,6 @@ unreachable while the button is off. Everything else is ready:
   session version exactly as for a credentials login.
 - The secrets are read only through `lib/env.ts`, server-side. Nothing about Google reaches
   the client bundle apart from the disabled button.
-
-Turning it on is the one-line flag change.
 
 **MongoDB Atlas.** `MONGODB_URI` is an SRV string (`mongodb+srv://…/gixxer?appName=…`) and
 must include the database name; `lib/env.ts` rejects one without it. `lib/db/mongoose.ts`

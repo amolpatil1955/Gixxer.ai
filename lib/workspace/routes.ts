@@ -10,6 +10,7 @@ export const workspaceRoutes = {
   projects: "/app/projects",
   project: (id: string) => `/app/projects/${id}`,
   chatbots: "/app/chatbots",
+  newChatbot: "/app/chatbots/new",
   chatbot: (id: string, tab: BotTab = "overview") => `/app/chatbots/${id}/${tab}`,
   account: "/app/account",
 } as const;

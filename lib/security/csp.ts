@@ -13,7 +13,9 @@ export interface CspOptions {
 export function buildContentSecurityPolicy({ nonce, isDevelopment, embeddable = false }: CspOptions): string {
   const directives = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-eval'" : ""}`,
+    // 'wasm-unsafe-eval' lets the PDF viewer compile its WebAssembly image decoders. It permits
+    // WebAssembly only, never eval() of a string, so no script can be built from text at runtime.
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'${isDevelopment ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     // Unsplash reference photos load straight from its CDN; the API itself is only ever called server-side.
     "img-src 'self' blob: data: https://lh3.googleusercontent.com https://images.unsplash.com https://plus.unsplash.com",

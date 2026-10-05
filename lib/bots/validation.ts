@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BOT_TONES, WIDGET_POSITIONS } from "./constants";
+import { BOT_THEME_KEYS, BOT_TONES, BOT_USE_CASES, WIDGET_POSITIONS } from "./constants";
 
 const objectId = z.string().regex(/^[a-f0-9]{24}$/i, "Invalid id");
 const line = (max: number) => z.string().trim().max(max, `Keep this under ${max} characters`);
@@ -12,7 +12,24 @@ const origin = z
 
 export const createBotSchema = z.object({
   name: line(60).min(1, "Give the bot a name"),
+  useCase: z.enum(BOT_USE_CASES).optional(),
 });
+
+export const websiteSourceSchema = z.object({
+  botId: objectId,
+  url: z.string().trim().min(1, "Enter a website address").max(2000),
+});
+
+export const advanceSourceSchema = z.object({ botId: objectId, sourceId: objectId });
+
+export const themeSchema = z.object({
+  botId: objectId,
+  preset: z.enum(BOT_THEME_KEYS),
+  position: z.enum(WIDGET_POSITIONS),
+  accent: z.string().regex(/^#[0-9a-f]{6}$/i, "Use a hex colour like #2563eb"),
+});
+
+export const publishSchema = z.object({ botId: objectId });
 
 export const botIdSchema = z.object({ botId: objectId });
 

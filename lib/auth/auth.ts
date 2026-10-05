@@ -32,11 +32,13 @@ export function googleProviderIfConfigured() {
 }
 
 /** Whether Google is fully configured, for diagnostics. Never exposes the values. */
-export function googleAuthStatus(): { configured: boolean; enabled: boolean; callbackPath: string } {
+export function googleAuthStatus(): { configured: boolean; enabled: boolean; available: boolean; callbackPath: string } {
   const env = getEnv();
+  const configured = Boolean(env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET);
   return {
-    configured: Boolean(env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET),
+    configured,
     enabled: GOOGLE_SIGN_IN_ENABLED,
+    available: configured && GOOGLE_SIGN_IN_ENABLED,
     callbackPath: "/api/auth/callback/google",
   };
 }

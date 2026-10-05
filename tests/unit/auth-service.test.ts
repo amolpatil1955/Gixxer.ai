@@ -23,12 +23,16 @@ describe.runIf(dbAvailable)("auth service (MongoDB)", () => {
     await UserModel.init(); // make sure the unique email index exists before duplicate tests
   });
 
+  // Only this file's own accounts: the suites share one database and run in parallel,
+  // so wiping every user would pull the ground out from under another file's test.
+  const OWN_ACCOUNTS = { email: /@example\.com$/ };
+
   beforeEach(async () => {
-    await UserModel.deleteMany({});
+    await UserModel.deleteMany(OWN_ACCOUNTS);
   });
 
   afterAll(async () => {
-    await UserModel.deleteMany({});
+    await UserModel.deleteMany(OWN_ACCOUNTS);
     await disconnectFromDatabase();
   });
 

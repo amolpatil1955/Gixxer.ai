@@ -77,8 +77,11 @@ describe("extraction", () => {
 
     const csv = await extractFile("csv", Buffer.from("name,qty\napples,3\npears,5\n"));
     expect(csv.sheets).toEqual(["CSV"]);
-    expect(csv.segments[0]?.locator).toBe("CSV!A2:B3");
-    expect(csv.segments[0]?.text).toContain("name: pears | qty: 5");
+    // The first segment describes the workbook, so questions about its shape are answerable.
+    expect(csv.segments[0]?.locator).toBe("workbook");
+    expect(csv.segments[0]?.text).toContain("2 data rows");
+    expect(csv.segments[1]?.locator).toBe("CSV!A2:B3");
+    expect(csv.segments[1]?.text).toContain("name: pears | qty: 5");
   });
 
   it("reads every sheet of a workbook", async () => {
@@ -88,8 +91,9 @@ describe("extraction", () => {
     const bytes = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
     const result = await extractFile("xlsx", bytes);
     expect(result.sheets).toEqual(["Retention", "Cash"]);
-    expect(result.segments.map((segment) => segment.locator)).toEqual(["Retention!A2:B2", "Cash!A2:B2"]);
-    expect(result.segments[1]?.text).toContain("Runway: 14");
+    expect(result.segments.map((segment) => segment.locator)).toEqual(["workbook", "Retention!A2:B2", "Cash!A2:B2"]);
+    expect(result.segments[0]?.text).toContain("Workbook with 2 sheets");
+    expect(result.segments[2]?.text).toContain("Runway: 14");
   });
 
   it("strips markup from a web page and keeps the words", () => {

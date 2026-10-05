@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AuthCard } from "@/components/auth/auth-card";
 import { RegisterForm } from "@/components/auth/register-form";
+import { googleAuthStatus } from "@/lib/auth/auth";
 import { routes } from "@/lib/auth/routes";
 import { getSessionState } from "@/lib/auth/session";
 
@@ -18,7 +19,7 @@ export default async function RegisterPage() {
       title="Create your Gixxer.ai account"
       description="One account for chat, images, file intelligence and business chatbots."
     >
-      <RegisterForm />
+      <RegisterForm googleAvailable={googleAuthStatus().available} />
     </AuthCard>
   );
 }

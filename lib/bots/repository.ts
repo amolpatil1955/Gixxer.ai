@@ -8,8 +8,10 @@ import {
   BotSourceModel,
   LeadModel,
   type BotStatus,
+  type SourceStatus,
   type SourceType,
 } from "@/lib/db/models/workspace.models";
+import { DEFAULT_THEME_KEY, tokensFor } from "./themes";
 import type { BotTone, WidgetPosition } from "./constants";
 
 export interface BotRecord {
@@ -23,10 +25,12 @@ export interface BotRecord {
   businessInfo: string;
   instructions: string;
   tone: BotTone;
+  useCase: string;
   suggestedQuestions: string[];
-  theme: { accent: string; position: WidgetPosition };
+  theme: { accent: string; position: WidgetPosition; preset: string };
   behavior: { collectLeads: boolean; citeSources: boolean; knowledgeOnly: boolean };
   allowedOrigins: string[];
+  publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,7 +43,8 @@ export interface PublicBotConfig {
   welcomeMessage: string;
   businessName: string;
   suggestedQuestions: string[];
-  theme: { accent: string; position: WidgetPosition };
+  /** `radius` lets the launcher's iframe match the panel without shipping the palette. */
+  theme: { accent: string; position: WidgetPosition; preset: string; radius: number };
   collectLeads: boolean;
 }
 
@@ -49,8 +54,14 @@ export interface SourceRecord {
   name: string;
   fileId: string | null;
   url: string | null;
-  status: "indexing" | "indexed" | "failed";
+  urlKey: string | null;
+  status: SourceStatus;
   chunkCount: number;
+  pageCount: number;
+  jobId: string | null;
+  crawlStartedAt: Date | null;
+  lastCrawledAt: Date | null;
+  title: string | null;
   error: string | null;
   createdAt: Date;
 }
@@ -93,8 +104,10 @@ type LeanBot = {
   businessInfo?: string;
   instructions?: string;
   tone?: BotTone;
+  useCase?: string;
   suggestedQuestions?: string[];
-  theme?: { accent?: string; position?: WidgetPosition };
+  theme?: { accent?: string; position?: WidgetPosition; preset?: string };
+  publishedAt?: Date | null;
   behavior?: { collectLeads?: boolean; citeSources?: boolean; knowledgeOnly?: boolean };
   allowedOrigins?: string[];
   createdAt?: Date;
@@ -115,17 +128,25 @@ function toBot(doc: LeanBot): BotRecord {
     businessInfo: doc.businessInfo ?? "",
     instructions: doc.instructions ?? "",
     tone: doc.tone ?? "friendly",
+    useCase: doc.useCase ?? "support",
     suggestedQuestions: doc.suggestedQuestions ?? [],
-    theme: { accent: doc.theme?.accent ?? "#030000", position: doc.theme?.position ?? "right" },
+    theme: { accent: doc.theme?.accent ?? "#2563eb", position: doc.theme?.position ?? "right", preset: doc.theme?.preset ?? DEFAULT_THEME_KEY },
     behavior: {
       collectLeads: doc.behavior?.collectLeads ?? true,
       citeSources: doc.behavior?.citeSources ?? true,
       knowledgeOnly: doc.behavior?.knowledgeOnly ?? true,
     },
     allowedOrigins: doc.allowedOrigins ?? [],
+    publishedAt: doc.publishedAt ?? null,
     createdAt: doc.createdAt ?? new Date(0),
     updatedAt: doc.updatedAt ?? new Date(0),
   };
+}
+
+/** Sources still working, so the knowledge screen knows whether to keep polling. */
+export async function countUnsettledSources(userId: string, botId: string): Promise<number> {
+  await connectToDatabase();
+  return BotSourceModel.countDocuments({ botId: oid(botId), userId: oid(userId), status: { $in: ["pending", "crawling", "processing", "indexing"] } }).exec();
 }
 
 export function toPublicConfig(bot: BotRecord): PublicBotConfig {
@@ -136,7 +157,7 @@ export function toPublicConfig(bot: BotRecord): PublicBotConfig {
     welcomeMessage: bot.welcomeMessage,
     businessName: bot.businessName,
     suggestedQuestions: bot.suggestedQuestions,
-    theme: bot.theme,
+    theme: { ...bot.theme, radius: tokensFor(bot.theme.preset, bot.theme.accent).radius },
     collectLeads: bot.behavior.collectLeads,
   };
 }
@@ -206,8 +227,14 @@ type LeanSource = {
   name: string;
   fileId?: Types.ObjectId | null;
   url?: string | null;
-  status: "indexing" | "indexed" | "failed";
+  urlKey?: string | null;
+  status: SourceStatus;
   chunkCount?: number;
+  pageCount?: number;
+  jobId?: string | null;
+  crawlStartedAt?: Date | null;
+  lastCrawledAt?: Date | null;
+  title?: string | null;
   error?: string | null;
   createdAt?: Date;
 };
@@ -219,8 +246,14 @@ function toSource(doc: LeanSource): SourceRecord {
     name: doc.name,
     fileId: doc.fileId ? doc.fileId.toString() : null,
     url: doc.url ?? null,
+    urlKey: doc.urlKey ?? null,
     status: doc.status,
     chunkCount: doc.chunkCount ?? 0,
+    pageCount: doc.pageCount ?? 0,
+    jobId: doc.jobId ?? null,
+    crawlStartedAt: doc.crawlStartedAt ?? null,
+    lastCrawledAt: doc.lastCrawledAt ?? null,
+    title: doc.title ?? null,
     error: doc.error ?? null,
     createdAt: doc.createdAt ?? new Date(0),
   };
@@ -232,10 +265,24 @@ export async function listSources(userId: string, botId: string): Promise<Source
   return docs.map(toSource);
 }
 
+export async function getSource(userId: string, sourceId: string): Promise<SourceRecord | null> {
+  if (!Types.ObjectId.isValid(sourceId)) return null;
+  await connectToDatabase();
+  const doc = await BotSourceModel.findOne({ _id: oid(sourceId), userId: oid(userId) }).lean<LeanSource>().exec();
+  return doc ? toSource(doc) : null;
+}
+
+/** The bot's existing source for this address, so the same site is never crawled twice. */
+export async function findSourceByUrlKey(userId: string, botId: string, urlKey: string): Promise<SourceRecord | null> {
+  await connectToDatabase();
+  const doc = await BotSourceModel.findOne({ botId: oid(botId), userId: oid(userId), urlKey }).lean<LeanSource>().exec();
+  return doc ? toSource(doc) : null;
+}
+
 export async function createSource(
   userId: string,
   botId: string,
-  input: { type: SourceType; name: string; fileId?: string; url?: string },
+  input: { type: SourceType; name: string; fileId?: string; url?: string; urlKey?: string; status?: SourceStatus },
 ): Promise<SourceRecord> {
   await connectToDatabase();
   const doc = await BotSourceModel.create({
@@ -245,15 +292,25 @@ export async function createSource(
     name: input.name,
     fileId: input.fileId ? oid(input.fileId) : null,
     url: input.url ?? null,
+    urlKey: input.urlKey ?? null,
+    status: input.status ?? "pending",
   });
   return toSource(doc.toObject() as LeanSource);
 }
 
-export async function updateSource(
-  userId: string,
-  sourceId: string,
-  patch: { status: "indexing" | "indexed" | "failed"; chunkCount?: number; error?: string | null },
-): Promise<void> {
+export interface SourcePatch {
+  status?: SourceStatus;
+  chunkCount?: number;
+  pageCount?: number;
+  jobId?: string | null;
+  crawlStartedAt?: Date | null;
+  lastCrawledAt?: Date | null;
+  title?: string | null;
+  name?: string;
+  error?: string | null;
+}
+
+export async function updateSource(userId: string, sourceId: string, patch: SourcePatch): Promise<void> {
   await connectToDatabase();
   await BotSourceModel.updateOne({ _id: oid(sourceId), userId: oid(userId) }, { $set: patch }).exec();
 }

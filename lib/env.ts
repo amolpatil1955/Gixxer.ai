@@ -50,6 +50,8 @@ const envSchema = z.object({
   UNSPLASH_APPLICATION_ID: optionalSecret,
   UNSPLASH_ACCESS_KEY: optionalSecret,
   UNSPLASH_SECRET_KEY: optionalSecret,
+  /** Firecrawl, for crawling a website into a chatbot's knowledge. Server-side only; unset disables the option. */
+  FIRECRAWL_API_KEY: optionalSecret,
   /** Shared secret an external scheduler sends to POST /api/cron. Unset means the route is closed. */
   CRON_SECRET: optionalSecret,
   /**
