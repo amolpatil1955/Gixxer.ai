@@ -1,0 +1,12 @@
+# Vercel builds the app itself, so nothing local needs uploading. Without this,
+# the 2 GB .next directory and the test artifacts are sent with every deploy.
+.next
+out
+build
+test-results
+playwright-report
+blob-report
+playwright/.cache
+coverage
+tests
+*.tsbuildinfo
