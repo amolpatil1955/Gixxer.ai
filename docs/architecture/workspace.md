@@ -180,7 +180,9 @@ place Gemini is used; text, reasoning, images, embeddings and dictation are unch
 `POST /api/voice/session` mints a **single-use ephemeral token** through
 `lib/ai/realtime/gemini-live.ts`, valid for one new session within ninety seconds, bound to a
 configuration the server locked (model, voice, system instruction, transcription, turn
-detection). The provider's API key never leaves the server, and the browser cannot widen what
+detection). The model is `GEMINI_LIVE_MODEL`, default `gemini-3.8-live`. Live model names are
+retired without notice: when a session fails with "unavailable", list the models that still
+offer `bidiGenerateContent` and move the default, rather than assuming the key is at fault. The provider's API key never leaves the server, and the browser cannot widen what
 the token allows. `POST /api/voice/turn` saves one exchange. Both are owner-only and rate
 limited. Without `GEMINI_API_KEY` the button is not rendered at all.
 
@@ -203,11 +205,17 @@ attempt is refused instead of opening a second microphone stream, and `stop()` r
 track, node, context, timer and listener.
 
 The window (`components/voice/voice-assistant.tsx`) shows one state at a time: connecting,
-listening, thinking, speaking, reconnecting, blocked, unavailable. The orb is an animated image
-at `public/voice/orb.gif`, falling back to the G mark when the file is absent; the rings around
-it breathe with the room's loudness while listening, turn while thinking and pulse while
-speaking. Every animation is a CSS transform or opacity, and loudness reaches the page as one
-custom property written a few times a second, never as React state.
+listening, thinking, speaking, reconnecting, blocked, unavailable. There is no logo in voice
+mode. The visualiser (`components/voice/voice-waves.tsx`) is several thin lines flowing across
+the middle in white, blue and violet, drawn on one canvas: it cycles through four movements a
+few seconds apart, flowing, a tighter pulse, a circular ripple and back to flowing, easing
+between them. The lines run taller and faster with the room's loudness while listening and with
+the voice while speaking.
+
+It is one `requestAnimationFrame` loop capped at 30 frames a second, allocating nothing per
+frame, stopped when the tab is hidden and on unmount. Loudness reaches it through a ref read
+each frame, so a changing level never re-renders React, and a reader who asks for less motion
+gets a still frame instead of a loop.
 
 ## Plugins
 

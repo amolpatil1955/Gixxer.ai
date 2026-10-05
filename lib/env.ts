@@ -41,7 +41,7 @@ const envSchema = z.object({
    * Server-side only; unset hides the voice conversation button.
    */
   GEMINI_API_KEY: optionalSecret,
-  GEMINI_LIVE_MODEL: withDefault("gemini-live-2.5-flash-preview"),
+  GEMINI_LIVE_MODEL: withDefault("gemini-3.8-live"),
   GEMINI_LIVE_VOICE: withDefault("Aoede"),
   /** Model overrides. The defaults are the ones verified against the live APIs. */
   GROQ_MODEL: withDefault("qwen/qwen3.8-27b"),

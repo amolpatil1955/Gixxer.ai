@@ -3,8 +3,8 @@
 import { Mic, MicOff, PhoneOff, RotateCcw, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { GMark } from "@/components/brand/g-mark";
 import { liveVoiceSessions, VoiceSessionManager } from "@/lib/voice/session-manager";
+import { VoiceWaves, type WaveMood } from "./voice-waves";
 import type { VoiceState, VoiceTurnDto } from "@/lib/voice/types";
 import { cn } from "@/lib/utils/cn";
 
@@ -23,9 +23,6 @@ interface VoiceAssistantProps {
   onConversation: (turn: VoiceTurnDto) => void;
   onClose: () => void;
 }
-
-/** The animated orb at the centre of the window. Drop the GIF at public/voice/orb.gif. */
-const ORB_GIF = "/voice/orb.gif";
 
 const TITLES: Record<VoiceState, string> = {
   idle: "Talk to Gixxer",
@@ -56,18 +53,20 @@ const BODIES: Record<VoiceState, string> = {
 export function VoiceAssistant({ open, conversationId, projectId, onConversation, onClose }: VoiceAssistantProps) {
   // One manager per window; it lives as long as the window is mounted.
   const [manager] = useState(() => new VoiceSessionManager());
-  const [orbMissing, setOrbMissing] = useState(false);
+  // The voice level drives the canvas directly; React never re-renders for it.
+  const level = useRef(0);
   const snapshot = useSyncExternalStore(manager.subscribe, manager.getSnapshot, manager.getSnapshot);
-  const orb = useRef<HTMLDivElement>(null);
   const transcript = useRef<HTMLOListElement>(null);
   const latest = useRef({ onConversation, onClose, conversationId, projectId });
   useEffect(() => {
     latest.current = { onConversation, onClose, conversationId, projectId };
   });
 
-  // Loudness goes straight to a CSS variable, never through React state.
+  // Loudness goes straight into a ref the canvas reads each frame, never through React state.
   useEffect(() => {
-    manager.setLevelListener((level) => orb.current?.style.setProperty("--level", level.toFixed(3)));
+    manager.setLevelListener((value) => {
+      level.current = value;
+    });
     return () => manager.setLevelListener(null);
   }, [manager]);
 
@@ -105,6 +104,7 @@ export function VoiceAssistant({ open, conversationId, projectId, onConversation
   }, [snapshot.lines]);
 
   const { state, message, muted, lines } = snapshot;
+  const waveMood: WaveMood = state === "listening" ? "listening" : state === "speaking" ? "speaking" : state === "thinking" || state === "connecting" || state === "reconnecting" ? "thinking" : "idle";
   const active = state === "listening" || state === "thinking" || state === "speaking" || state === "reconnecting" || state === "connecting";
   const failed = state === "denied" || state === "unsupported" || state === "error";
 
@@ -139,20 +139,8 @@ export function VoiceAssistant({ open, conversationId, projectId, onConversation
               <X className="size-4.5" aria-hidden="true" />
             </button>
 
-            <div ref={orb} className={cn("va-orb mx-auto mt-2", `va-${state}`)} aria-hidden="true">
-              <span className="va-ring" />
-              <span className="va-ring" />
-              <span className="va-ring" />
-              <span className="va-core">
-                {/* The owner's own animated orb; the G stands in only if the file is missing. */}
-                {/* eslint-disable-next-line @next/next/no-img-element -- a GIF, animated by the browser, from our own /public */}
-                {orbMissing ? <GMark className="size-9" /> : <img src={ORB_GIF} alt="" className="va-gif" onError={() => setOrbMissing(true)} />}
-              </span>
-            </div>
-            <div className={cn("va-bars mx-auto mt-4", state === "speaking" ? "opacity-100" : "opacity-0")} aria-hidden="true">
-              {Array.from({ length: 9 }, (_, index) => (
-                <span key={index} style={{ animationDelay: `${(index % 5) * 0.11}s` }} />
-              ))}
+            <div className="mx-auto mt-1 h-28 w-full max-w-[340px] sm:h-32">
+              <VoiceWaves mood={waveMood} levelRef={level} />
             </div>
 
             <h2 id="voice-assistant-title" className="mt-4 text-center text-[18px] font-semibold tracking-[-0.01em]">
