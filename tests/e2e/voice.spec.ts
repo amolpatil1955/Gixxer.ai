@@ -87,14 +87,15 @@ test.describe("voice assistant", () => {
     await page.getByRole("button", { name: "Talk to Gixxer" }).click();
     const window_ = page.getByRole("dialog", { name: /Talk to Gixxer|Listening|Connecting/ });
     await expect(window_).toBeVisible();
+    // Gixxer opens the call itself, then settles into listening.
     await expect(orb(page)).toHaveAttribute("data-voice-state", "listening", { timeout: 45_000 });
     // Exactly one conversation holds the microphone.
     await expect(orb(page)).toHaveAttribute("data-voice-sessions", "1");
 
     // A turn: speak, pause, and the assistant answers out loud.
     await speakUntilAnswered(page);
-    await expect(page.locator("[data-transcript-role='user']")).toContainText("Something said", { timeout: 30_000 });
-    await expect(page.locator("[data-transcript-role='assistant']")).toContainText("Mock voice reply", { timeout: 30_000 });
+    await expect(page.locator("[data-transcript-role='user']").last()).toContainText("Something said", { timeout: 30_000 });
+    await expect(page.locator("[data-transcript-role='assistant']").last()).toContainText("Mock voice reply", { timeout: 30_000 });
 
     // Talking over it stops the answer at once and returns to listening.
     await say(page, 0.6);
@@ -123,6 +124,30 @@ test.describe("voice assistant", () => {
     await page.getByRole("textbox", { name: "Message" }).fill("And in writing?");
     await page.getByRole("button", { name: "Send message" }).click();
     await expect(page.locator("[data-message-role='assistant']").last()).toContainText("Mock reply to: And in writing?", { timeout: 45_000 });
+  });
+
+  test("opens the call by speaking first, once, and yields if the person talks over it", async ({ page, context }) => {
+    await context.grantPermissions(["microphone"]);
+    await fakeMicrophone(page);
+    await register(page, "Voice Greeting");
+
+    await page.getByRole("button", { name: "Talk to Gixxer" }).click();
+    // The greeting is spoken only once the session is ready, so it begins in Speaking.
+    await expect(orb(page)).toHaveAttribute("data-voice-state", "speaking", { timeout: 45_000 });
+    const greeting = page.locator("[data-transcript-role='assistant']").first();
+    await expect(greeting).toContainText("How can I help you", { timeout: 30_000 });
+    // Then it settles into listening on its own.
+    await expect(orb(page)).toHaveAttribute("data-voice-state", "listening", { timeout: 45_000 });
+
+    // Talking over the greeting is honoured, and the greeting never comes a second time.
+    await speakUntilAnswered(page);
+    await say(page, 0.6);
+    await expect(orb(page)).toHaveAttribute("data-voice-state", "listening", { timeout: 30_000 });
+    await say(page, 0);
+    await expect(page.locator("[data-transcript-role='assistant']").filter({ hasText: "How can I help you" })).toHaveCount(1);
+
+    await page.getByRole("button", { name: "End conversation" }).click();
+    await expect(orb(page)).toHaveAttribute("data-voice-state", "ended", { timeout: 30_000 });
   });
 
   test("recovers on its own when the connection drops mid-conversation", async ({ page, context }) => {

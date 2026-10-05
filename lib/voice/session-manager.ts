@@ -81,6 +81,8 @@ export class VoiceSessionManager {
   private levelTimer: number | null = null;
   private stopping = false;
   private connecting = false;
+  /** The call is opened once per conversation, not once per connection. */
+  private greeted = false;
   private counter = 0;
   private readonly id = nextId++;
 
@@ -119,6 +121,7 @@ export class VoiceSessionManager {
     liveId = this.id;
     this.options = options;
     this.stopping = false;
+    this.greeted = false;
     this.connecting = true;
     this.set({ state: "connecting", message: null, conversationId: options.conversationId, reconnectAttempt: 0, lines: this.snapshot.state === "ended" ? [] : this.snapshot.lines });
 
@@ -192,6 +195,16 @@ export class VoiceSessionManager {
         this.touch();
         this.startLevelLoop();
         this.armIdle();
+        /*
+         * Gixxer speaks first, in its own voice, once the session is really
+         * ready. Guarded so a reconnect or a re-render never greets twice, and
+         * skipped once the person has started talking: by then a greeting would
+         * be speaking over them.
+         */
+        if (!this.greeted && !this.userText.trim()) {
+          this.greeted = true;
+          this.transport?.sendText("The call has just connected. Greet the person now.");
+        }
       },
       onAudio: (pcm) => {
         if (this.stopping || !this.player) return;

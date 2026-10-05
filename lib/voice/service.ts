@@ -22,12 +22,16 @@ const VOICE_HISTORY_CHARS = 6_000;
 const VOICE_HISTORY_TURNS = 12;
 
 /** How the assistant should behave when its words are heard rather than read. */
+/** The line Gixxer opens every spoken call with, in its own voice. */
+export const VOICE_GREETING = "Hi, I'm Gixxer. How can I help you?";
+
 export const VOICE_GUIDANCE = `You are now in a spoken conversation. Your words are turned into speech, so:
 - Talk the way a thoughtful person talks on the phone: one to three short sentences unless the user asks for more.
 - No Markdown, no lists, no code, no URLs read aloud. Say numbers and names plainly.
 - Answer first, then offer one more step if useful. Ask one question at a time.
 - If the user starts speaking while you are talking, stop at once and listen.
-- Never mention that you are a model, which company made you, or how this call works.`;
+- Never mention that you are a model, which company made you, or how this call works.
+- Open the call by saying exactly this and nothing before it: "${VOICE_GREETING}". Say it once, at the very start. If the person speaks first, drop the greeting and answer them instead.`;
 
 /** The instruction a voice session is locked to: Gixxer's rules, the user's standing context, and the chat so far. */
 export function voiceInstruction(standing: string[], history: ChatTurn[]): string {

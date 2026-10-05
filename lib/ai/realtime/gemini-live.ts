@@ -1,7 +1,7 @@
 import "server-only";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { getEnv } from "@/lib/env";
-import { ProviderError } from "../errors";
+import { codeForStatus, ProviderError } from "../errors";
 
 /*
  * Realtime voice runs on Gemini's Live API, the one place Gemini is used in this
@@ -75,8 +75,14 @@ export async function mintLiveToken(input: LiveTokenInput): Promise<LiveToken> {
           model: env.GEMINI_LIVE_MODEL,
           config: liveSessionConfig(input.systemInstruction),
         },
-        // Nothing beyond what the browser legitimately adds (session resumption) may be changed.
-        lockAdditionalFields: ["temperature", "topP", "topK", "maxOutputTokens", "tools", "toolConfig", "enableAffectiveDialog", "thinkingConfig", "proactivity"],
+        /*
+         * An empty list locks exactly the fields supplied above and nothing more,
+         * which is what we want: the browser may add session resumption and may
+         * change nothing else. Naming further fields here is not a tighter lock,
+         * it is a field mask over BidiGenerateContentSetup, and any name that is
+         * not a field of that message makes the whole request INVALID_ARGUMENT.
+         */
+        lockAdditionalFields: [],
         httpOptions: { timeout: 15_000 },
       },
     });
@@ -84,9 +90,36 @@ export async function mintLiveToken(input: LiveTokenInput): Promise<LiveToken> {
     return { token: token.name, model: env.GEMINI_LIVE_MODEL, newSessionExpiresAt: newSessionExpireTime, expiresAt: expireTime };
   } catch (error) {
     if (error instanceof ProviderError) throw error;
-    const message = error instanceof Error ? error.message : String(error);
-    const status = /\b(\d{3})\b/.exec(message)?.[1];
-    const code = status === "429" ? "rate_limited" : status === "401" || status === "403" ? "not_configured" : /timeout|timed out/i.test(message) ? "timeout" : "unavailable";
-    throw new ProviderError("gemini", code, message, { retryable: code !== "not_configured" });
+    throw asProviderError(error);
   }
 }
+
+/**
+ * The provider reports failures as a JSON body inside the error's message.
+ * Reading the status out of it is what lets a request this app got wrong (4xx)
+ * be told apart from a provider that is genuinely down (5xx), so a reader is
+ * never told to "try again later" about something that will never fix itself.
+ */
+export function asProviderError(error: unknown): ProviderError {
+  const message = error instanceof Error ? error.message : String(error);
+  const body = /\{[\s\S]*\}/.exec(message)?.[0];
+  let status: number | undefined;
+  let detail = message;
+  if (body) {
+    try {
+      const parsed = JSON.parse(body) as { error?: { code?: number; message?: string } };
+      if (typeof parsed.error?.code === "number") status = parsed.error.code;
+      if (parsed.error?.message) detail = parsed.error.message;
+    } catch {
+      // Not JSON after all; the raw message is logged instead.
+    }
+  }
+  if (status === undefined) {
+    const loose = /\b(4\d{2}|5\d{2})\b/.exec(message)?.[1];
+    if (loose) status = Number(loose);
+  }
+  const timedOut = /timeout|timed out|ETIMEDOUT|ECONNRESET|fetch failed/i.test(message);
+  const code = status ? codeForStatus(status) : timedOut ? "timeout" : "unavailable";
+  return new ProviderError("gemini", code, detail, { status, retryable: code === "timeout" || code === "rate_limited" || code === "unavailable" });
+}
+

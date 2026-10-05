@@ -31,6 +31,8 @@ export interface ConnectOptions {
 export interface VoiceTransport {
   connect(events: TransportEvents, options: ConnectOptions): Promise<void>;
   sendAudio(pcm: Int16Array): void;
+  /** Nudges the model to take a turn. Used once, to open the call. */
+  sendText(text: string): void;
   /** The microphone went quiet on purpose (muted or stopped). */
   sendAudioStreamEnd(): void;
   close(): void;
@@ -42,12 +44,19 @@ export interface VoiceTransport {
 
 interface LiveSessionLike {
   sendRealtimeInput(params: { audio?: { data: string; mimeType: string }; audioStreamEnd?: boolean }): void;
+  sendClientContent(params: { turns: string; turnComplete: boolean }): void;
   close(): void;
 }
 
 export class RealtimeTransport implements VoiceTransport {
   private session: LiveSessionLike | null = null;
   private closed = false;
+  /*
+   * Setup can complete while the connect call is still resolving, so anything
+   * asked for in that window (the opening greeting) is held here and sent the
+   * moment the session exists. Without this the greeting is silently dropped.
+   */
+  private pendingText: string | null = null;
 
   constructor(
     private readonly token: string,
@@ -112,10 +121,20 @@ export class RealtimeTransport implements VoiceTransport {
       ready = true;
       events.onReady();
     }
+    if (this.pendingText !== null) {
+      const text = this.pendingText;
+      this.pendingText = null;
+      session.sendClientContent({ turns: text, turnComplete: true });
+    }
   }
 
   sendAudio(pcm: Int16Array) {
     this.session?.sendRealtimeInput({ audio: { data: pcmToBase64(pcm), mimeType: "audio/pcm;rate=16000" } });
+  }
+
+  sendText(text: string) {
+    if (this.session) this.session.sendClientContent({ turns: text, turnComplete: true });
+    else this.pendingText = text;
   }
 
   sendAudioStreamEnd() {
@@ -273,6 +292,13 @@ export class MockTransport implements VoiceTransport {
     this.heard = false;
     this.events!.onInterrupted();
     this.events!.onTurnComplete();
+  }
+
+  sendText() {
+    // Whatever it is asked to open with, the stand-in answers in its own words.
+    if (this.phase !== "listening") return;
+    this.phase = "thinking";
+    this.after(THINK_MS, () => this.speak("Hi, I'm Gixxer. How can I help you?"));
   }
 
   sendAudioStreamEnd() {
