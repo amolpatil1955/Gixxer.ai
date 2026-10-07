@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "Admin" };
 
 /** The account directory. `requireAdmin` sends anyone else back to the workspace. */
 export default async function AdminPage({ searchParams }: PageProps<"/app/admin">) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const params = await searchParams;
   const query = typeof params.q === "string" ? params.q : "";
   const [users, total] = await Promise.all([listUsers(query), countUsers()]);
@@ -22,6 +22,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/app/admin"
       />
       <div className="mt-8">
         <UserDirectory
+          adminId={admin.id}
           total={total}
           query={query}
           users={users.map((user) => ({

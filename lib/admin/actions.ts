@@ -17,7 +17,8 @@ const objectId = z.string().regex(/^[a-f0-9]{24}$/i, "Invalid id");
 
 const startSchema = z.object({
   userId: objectId,
-  reason: z.string().trim().min(3, "Say why you need to open this account").max(300),
+  /** Recorded when given. Optional, so opening an account is never blocked by a form. */
+  reason: z.string().trim().max(300).default(""),
 });
 
 const roleSchema = z.object({ userId: objectId, role: z.enum(["user", "admin"]) });

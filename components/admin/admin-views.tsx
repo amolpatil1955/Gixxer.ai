@@ -60,9 +60,33 @@ function when(iso: string | null): string {
 const card = "rounded-2xl border border-line bg-ink-900/60 p-5";
 const label = "font-mono text-[10px] uppercase tracking-[0.22em] text-ink-400";
 
-export function UserDirectory({ users, total, query }: { users: UserRow[]; total: number; query: string }) {
+export function UserDirectory({ users, total, query, adminId }: { users: UserRow[]; total: number; query: string; adminId: string }) {
   const router = useRouter();
   const [search, setSearch] = useState(query);
+  const [error, setError] = useState<string | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const { confirm, dialog } = useConfirm();
+
+  /** One click from the list into the account, with one confirmation so a misclick cannot land in the wrong one. */
+  async function logInAs(user: UserRow) {
+    setError(null);
+    const confirmed = await confirm({
+      title: `Log in to ${user.email}?`,
+      body: "You will be signed in as this person and can see and do everything in their account. The whole sitting is recorded against your name and shown to you throughout.",
+      confirmLabel: "Log in to this account",
+      tone: "default",
+    });
+    if (!confirmed) return;
+    setOpening(user.id);
+    startTransition(async () => {
+      const result = await startImpersonationAction({ userId: user.id, reason: "" });
+      if (result && !result.ok) {
+        setError(result.message);
+        setOpening(null);
+      }
+    });
+  }
 
   return (
     <div className="space-y-5">
@@ -92,37 +116,59 @@ export function UserDirectory({ users, total, query }: { users: UserRow[]; total
         {users.length} of {total} account{total === 1 ? "" : "s"}
       </p>
 
+      {error ? <Alert>{error}</Alert> : null}
+
       {users.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-line-strong px-5 py-10 text-center text-[13.5px] text-ink-400">Nothing matches.</p>
       ) : (
         <ul className="divide-y divide-line rounded-2xl border border-line" aria-label="Accounts">
-          {users.map((user) => (
-            <li key={user.id}>
-              <Link href={workspaceRoutes.adminUser(user.id)} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-ink-900/70" data-user-row={user.email}>
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-line bg-ink-800 text-ink-300" aria-hidden="true">
-                  <UserRound className="size-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
-                    <span className="truncate text-[14px] text-ink-50">{user.name}</span>
-                    {user.role === "admin" ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-line px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-200">
-                        <ShieldCheck className="size-3" aria-hidden="true" />
-                        Admin
-                      </span>
-                    ) : null}
+          {users.map((user) => {
+            const self = user.id === adminId;
+            return (
+              <li key={user.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-ink-900/70" data-user-row={user.email}>
+                <Link href={workspaceRoutes.adminUser(user.id)} className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-line bg-ink-800 text-ink-300" aria-hidden="true">
+                    <UserRound className="size-4" />
                   </span>
-                  <span className="block truncate text-[12.5px] text-ink-400">{user.email}</span>
-                </span>
-                <span className="hidden shrink-0 text-right text-[11.5px] text-ink-400 sm:block">
-                  <span className="block">joined {when(user.createdAt)}</span>
-                  <span className="block">last seen {when(user.lastLoginAt)}</span>
-                </span>
-              </Link>
-            </li>
-          ))}
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate text-[14px] text-ink-50">{user.name}</span>
+                      {user.role === "admin" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-line px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-200">
+                          <ShieldCheck className="size-3" aria-hidden="true" />
+                          Admin
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="block truncate text-[12.5px] text-ink-400">{user.email}</span>
+                  </span>
+                  <span className="hidden shrink-0 text-right text-[11.5px] text-ink-400 lg:block">
+                    <span className="block">joined {when(user.createdAt)}</span>
+                    <span className="block">last seen {when(user.lastLoginAt)}</span>
+                  </span>
+                </Link>
+                {user.role === "admin" || self ? (
+                  <span className="shrink-0 text-[11.5px] text-ink-500">{self ? "You" : "Administrator"}</span>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() => void logInAs(user)}
+                    loading={pending && opening === user.id}
+                    loadingLabel="Opening…"
+                    disabled={pending}
+                  >
+                    <LogIn className="size-4" aria-hidden="true" />
+                    Log in to this account
+                  </Button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
+      {dialog}
     </div>
   );
 }
@@ -146,9 +192,9 @@ export function UserDetail({ user, activity, sittings, isSelf }: { user: UserRow
   async function signInAs() {
     setError(null);
     const confirmed = await confirm({
-      title: `Open ${user.email}?`,
+      title: `Log in to ${user.email}?`,
       body: "You will be signed in as this person and can see everything in their account. The sitting is recorded against your name and shown to you the whole time.",
-      confirmLabel: "Sign in as this account",
+      confirmLabel: "Log in to this account",
       tone: "default",
     });
     if (!confirmed) return;
@@ -200,7 +246,7 @@ export function UserDetail({ user, activity, sittings, isSelf }: { user: UserRow
           ) : (
             <>
               <p className="mt-2 text-[12.5px] leading-relaxed text-ink-400">Recorded against your name, visible to you throughout, and it ends after an hour.</p>
-              <Field id="reason" label="Why" className="mt-3">
+              <Field id="reason" label="Why (optional, kept in the record)" className="mt-3">
                 <input
                   id="reason"
                   value={reason}
@@ -209,9 +255,9 @@ export function UserDetail({ user, activity, sittings, isSelf }: { user: UserRow
                   className={inputClassName}
                 />
               </Field>
-              <Button className="mt-3" onClick={() => void signInAs()} loading={pending} loadingLabel="Opening…" disabled={reason.trim().length < 3 || isSelf}>
+              <Button className="mt-3" onClick={() => void signInAs()} loading={pending} loadingLabel="Opening…" disabled={isSelf}>
                 <LogIn className="size-4" aria-hidden="true" />
-                Sign in as this account
+                Log in to this account
               </Button>
             </>
           )}

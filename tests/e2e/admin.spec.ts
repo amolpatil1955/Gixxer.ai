@@ -74,17 +74,18 @@ test.describe("admin", () => {
     await expect(page.getByRole("heading", { name: "Accounts" })).toBeVisible();
     await expect(page.locator(`[data-user-row='${member}']`)).toBeVisible();
 
-    // Their activity is visible as counts and titles.
-    await page.locator(`[data-user-row='${member}']`).click();
+    // The row carries its own button, so an account is one click and one confirmation away.
+    const row = page.locator(`[data-user-row='${member}']`);
+    await expect(row.getByRole("button", { name: "Log in to this account" })).toBeVisible();
+
+    // Their activity is visible as counts and titles on the detail page.
+    await row.getByRole("link").first().click();
     await expect(page).toHaveURL(/\/app\/admin\/[a-f0-9]{24}$/);
     await expect(page.getByText("My private plans")).toBeVisible();
 
-    // Opening the account needs a reason and a confirmation.
-    const open = page.getByRole("button", { name: "Sign in as this account" });
-    await expect(open).toBeDisabled();
-    await page.getByLabel("Why").fill("Reproducing their reported bug");
-    await open.click();
-    await page.getByRole("alertdialog").getByRole("button", { name: "Sign in as this account" }).click();
+    await page.getByLabel(/Why/).fill("Reproducing their reported bug");
+    await page.getByRole("button", { name: "Log in to this account" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Log in to this account" }).click();
 
     // Now inside their account, said plainly and permanently.
     await expect(page.locator(`[data-impersonation-banner='${member}']`)).toBeVisible({ timeout: 20_000 });
@@ -104,11 +105,27 @@ test.describe("admin", () => {
     await expect(page.getByRole("heading", { name: "Accounts" })).toBeVisible();
 
     // The sitting is in the record, with who, why and that it ended.
-    await page.locator(`[data-user-row='${member}']`).click();
+    await page.locator(`[data-user-row='${member}']`).getByRole("link").first().click();
     const history = page.getByRole("list", { name: "Impersonation history" });
     await expect(history).toContainText(owner);
     await expect(history).toContainText("Reproducing their reported bug");
     await expect(history).toContainText("ended admin");
+  });
+
+  test("the button on the list logs straight into the account", async ({ page }) => {
+    const member = await register(page, "Listed Person");
+    await logout(page);
+    const owner = await register(page, "Owner Three");
+    await makeAdmin(owner);
+
+    await page.goto("/app/admin");
+    await page.locator(`[data-user-row='${member}']`).getByRole("button", { name: "Log in to this account" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Log in to this account" }).click();
+    await expect(page.locator(`[data-impersonation-banner='${member}']`)).toBeVisible({ timeout: 20_000 });
+    // Inside their account, with the full workspace rather than a read-only view.
+    await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
+    await page.locator("[data-impersonation-banner]").getByRole("button", { name: "Leave this account" }).click();
+    await expect(page).toHaveURL(/\/app\/admin$/, { timeout: 20_000 });
   });
 
   test("an admin cannot open another admin's account", async ({ page }) => {
@@ -118,8 +135,13 @@ test.describe("admin", () => {
     const owner = await register(page, "Owner Two");
     await makeAdmin(owner);
     await page.goto("/app/admin");
-    await page.locator(`[data-user-row='${other}']`).click();
+    // The list offers no way in for an administrator's account.
+    const adminRow = page.locator(`[data-user-row='${other}']`);
+    await expect(adminRow.getByRole("button", { name: "Log in to this account" })).toHaveCount(0);
+    await expect(adminRow).toContainText("Administrator");
+
+    await adminRow.getByRole("link").first().click();
     await expect(page.getByText(/An administrator.s account cannot be opened this way/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sign in as this account" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Log in to this account" })).toHaveCount(0);
   });
 });
