@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Clock, Folder, ImageIcon, Library, Menu, PanelLeft, Puzzle, Search, SquarePen, X } from "lucide-react";
+import { Bot, Clock, Folder, ImageIcon, Library, Menu, PanelLeft, Puzzle, Search, ShieldCheck, SquarePen, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -13,6 +13,7 @@ import type { UserSettingsDto } from "@/lib/settings/types";
 import { cn } from "@/lib/utils/cn";
 import { workspaceRoutes } from "@/lib/workspace/routes";
 import { useSidebarCollapsed } from "@/lib/workspace/sidebar-store";
+import { ImpersonationBanner } from "@/components/admin/impersonation-banner";
 import { AccountMenu, type ShellUser } from "./account-menu";
 import { SettingsDialog, type SettingsSection } from "./settings/settings-dialog";
 import { SidebarConversations } from "./sidebar-conversations";
@@ -32,6 +33,10 @@ interface ShellProps {
   conversations: ConversationDto[];
   projects: ProjectSummaryDto[];
   settings: UserSettingsDto;
+  /** Shows the Admin entry. False while acting as someone else: no admin powers then. */
+  isAdmin?: boolean;
+  /** Set for the whole time this session is acting as another account. */
+  impersonation?: { email: string; actorEmail: string } | null;
   children: ReactNode;
 }
 
@@ -40,7 +45,7 @@ interface ShellProps {
  * and becomes a drawer on phones, the account menu, and the settings
  * dialog. Everything else is the page.
  */
-export function WorkspaceShell({ user, conversations, projects, settings, children }: ShellProps) {
+export function WorkspaceShell({ user, conversations, projects, settings, isAdmin = false, impersonation = null, children }: ShellProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useSidebarCollapsed();
   const [open, setOpen] = useState(false);
@@ -70,7 +75,7 @@ export function WorkspaceShell({ user, conversations, projects, settings, childr
   const nav = (rail: boolean) => (
     <nav aria-label="Workspace" className={cn(rail ? "px-2" : "px-2.5")}>
       <ul className="space-y-0.5">
-        {NAV.map((item) => {
+        {[...NAV, ...(isAdmin ? [{ label: "Admin", href: workspaceRoutes.admin, Icon: ShieldCheck } as const] : [])].map((item) => {
           const active = "exact" in item && item.exact ? pathname === item.href : pathname.startsWith(item.href);
           return (
             <li key={item.href}>
@@ -149,7 +154,9 @@ export function WorkspaceShell({ user, conversations, projects, settings, childr
   );
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-ink-950">
+    <div className="flex h-dvh flex-col overflow-hidden bg-ink-950">
+      {impersonation ? <ImpersonationBanner email={impersonation.email} actorEmail={impersonation.actorEmail} /> : null}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
       <aside
         className={cn("hidden shrink-0 border-r border-line bg-ink-950 transition-[width] duration-200 ease-out lg:block", collapsed ? "w-16" : "w-66")}
         aria-label="Sidebar"
@@ -209,6 +216,7 @@ export function WorkspaceShell({ user, conversations, projects, settings, childr
         </main>
       </div>
 
+      </div>
       {settingsSection ? <SettingsDialog user={user} initialSettings={settings} section={settingsSection} onSectionChange={setSettingsSection} onClose={() => setSettingsSection(null)} /> : null}
     </div>
   );

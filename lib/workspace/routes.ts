@@ -13,6 +13,8 @@ export const workspaceRoutes = {
   newChatbot: "/app/chatbots/new",
   chatbot: (id: string, tab: BotTab = "overview") => `/app/chatbots/${id}/${tab}`,
   account: "/app/account",
+  admin: "/app/admin",
+  adminUser: (id: string) => `/app/admin/${id}`,
 } as const;
 
 export const BOT_TABS = [

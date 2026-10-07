@@ -127,6 +127,39 @@ else changes.
 automated browser run sends every request from one address. Per-email limits are never
 scaled. Do not set it in production.
 
+## Admins and signing in as another account
+
+Every user document carries a `role`, `user` or `admin`. `ADMIN_EMAILS` is a comma-separated
+list that grants the admin role when a listed email signs in, through either provider, so a
+fresh database still has an owner without anyone editing it by hand. The list only ever
+grants; the role on the document is what every check reads, and `scripts/grant-admin.mjs`
+sets or removes it directly.
+
+An admin can open the account directory at `/app/admin`, see what an account has been doing
+in counts and titles, and sign in as it for support. The directory never shows the contents
+of a chat or a file: reading those means entering the account, which is recorded.
+
+Impersonation does **not** replace the admin's session. A second cookie, `gixxer-acting-as`,
+holds a ticket signed with `AUTH_SECRET` naming the admin, the account and the audit record.
+`getSessionState()` re-checks it on every request and ignores it unless the admin still
+exists, still holds a valid session and is still an admin, so "sign out everywhere" ends a
+sitting at once. The ticket carries its own expiry and lasts at most an hour. On its own,
+without the admin's session beside it, the cookie grants nothing.
+
+While a sitting is open, `requireUser()` returns the account being acted on, which is what
+every page and repository should see. `requireAdmin()` deliberately returns the *signed-in*
+account and refuses while impersonating, so a sitting can never be used to start another one
+or to change roles. An admin's account cannot be opened this way at all.
+
+Each sitting is written to `impersonations` before the cookie is set, with who, whom, why,
+the address and when it started, and closed when it ends. A banner naming both accounts is
+shown across every page for the whole time and cannot be dismissed.
+
+**What this does not do.** It records that an account was entered and for how long, not each
+action taken inside it. And the Data controls panel still tells users their data is theirs
+alone; if this feature is used on real accounts, that wording should say that administrators
+can access an account for support.
+
 ## Content Security Policy
 
 `proxy.ts` generates a fresh 128-bit nonce per request and sets the policy on both the

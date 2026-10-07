@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { WorkspaceShell } from "@/components/workspace/shell";
-import { requireUser } from "@/lib/auth/session";
+import { getSessionState, requireUser } from "@/lib/auth/session";
 import { findUserById } from "@/lib/auth/user-repository";
 import { listConversations } from "@/lib/chat/repository";
 import { toConversationDto } from "@/lib/chat/serialize";
@@ -10,6 +10,8 @@ import { getSettings } from "@/lib/settings/repository";
 
 export default async function WorkspaceLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
+  const state = await getSessionState();
+  const impersonation = state.status === "authenticated" ? state.impersonation : null;
   const [conversations, projects, settings, account] = await Promise.all([listConversations(user.id), listProjects(user.id), getSettings(user.id), findUserById(user.id)]);
 
   // Scheduled prompts that came due while nobody was looking run now, after the page is served.
@@ -21,6 +23,8 @@ export default async function WorkspaceLayout({ children }: LayoutProps<"/">) {
       conversations={toConversationDto(conversations)}
       projects={projects.map((project) => ({ id: project.id, name: project.name }))}
       settings={settings}
+      isAdmin={user.role === "admin" && !impersonation}
+      impersonation={impersonation ? { email: user.email, actorEmail: impersonation.actor.email } : null}
     >
       {children}
     </WorkspaceShell>

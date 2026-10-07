@@ -2,6 +2,7 @@ import "server-only";
 import { AuthServiceError } from "./errors";
 import { getDummyPasswordHash, hashPassword, verifyPassword } from "./password";
 import {
+  applyAdminBootstrap,
   createUser,
   findUserByEmail,
   isDuplicateKeyError,
@@ -55,5 +56,7 @@ export async function verifyCredentials(email: string, password: string): Promis
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) return null;
   await recordLogin(user.id);
+  // A listed owner gets the admin role here, so a fresh database needs no hand editing.
+  await applyAdminBootstrap(user.email);
   return toAuthenticatedUser(user);
 }

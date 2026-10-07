@@ -1,7 +1,8 @@
 import "server-only";
 import { Types } from "mongoose";
 import { connectToDatabase } from "@/lib/db/mongoose";
-import { UserModel, type AuthProvider } from "@/lib/db/models/user.model";
+import { getEnv } from "@/lib/env";
+import { UserModel, type AuthProvider, type UserRole } from "@/lib/db/models/user.model";
 
 /** What the rest of the app is allowed to see about a user. Never includes secrets. */
 export interface UserRecord {
@@ -10,6 +11,7 @@ export interface UserRecord {
   email: string;
   image: string | null;
   provider: AuthProvider;
+  role: UserRole;
   sessionVersion: number;
   createdAt: Date;
   lastLoginAt: Date | null;
@@ -32,6 +34,7 @@ type LeanUser = {
   email: string;
   image?: string | null;
   provider: AuthProvider;
+  role?: UserRole;
   sessionVersion: number;
   passwordHash?: string | null;
   createdAt?: Date;
@@ -45,6 +48,7 @@ function toRecord(doc: LeanUser): UserRecord {
     email: doc.email,
     image: doc.image ?? null,
     provider: doc.provider,
+    role: doc.role ?? "user",
     sessionVersion: doc.sessionVersion,
     createdAt: doc.createdAt ?? new Date(0),
     lastLoginAt: doc.lastLoginAt ?? null,
@@ -107,7 +111,7 @@ export async function upsertOAuthUser(input: OAuthUserInput): Promise<UserRecord
       { _id: existing._id },
       { $set: { lastLoginAt: new Date(), ...(existing.image ? {} : { image: input.image }) } },
     ).exec();
-    return toRecord({ ...existing, image: existing.image ?? input.image, lastLoginAt: new Date() });
+    return withAdminBootstrap(toRecord({ ...existing, image: existing.image ?? input.image, lastLoginAt: new Date() }));
   }
   try {
     const doc = await UserModel.create({
@@ -118,19 +122,63 @@ export async function upsertOAuthUser(input: OAuthUserInput): Promise<UserRecord
       provider: input.provider,
       lastLoginAt: new Date(),
     });
-    return toRecord(doc.toObject() as LeanUser);
+    return withAdminBootstrap(toRecord(doc.toObject() as LeanUser));
   } catch (error) {
     // Two first sign-ins racing: the unique index decides, and the loser links instead.
     if (!isDuplicateKeyError(error)) throw error;
     const winner = await UserModel.findOne({ email }).lean<LeanUser>().exec();
     if (!winner) throw error;
-    return toRecord(winner);
+    return withAdminBootstrap(toRecord(winner));
   }
+}
+
+/**
+ * Emails from ADMIN_EMAILS, lowercased. The role on the user document is what
+ * every check reads; this list only grants it, so a fresh database still has an
+ * owner without anyone editing the database by hand.
+ */
+export function bootstrapAdminEmails(): string[] {
+  return getEnv()
+    .ADMIN_EMAILS.split(",")
+    .map((entry) => normalizeEmail(entry))
+    .filter(Boolean);
+}
+
+/** Grants the admin role to a listed email, once, on sign-in. Never removes it. */
+export async function applyAdminBootstrap(email: string): Promise<void> {
+  const listed = bootstrapAdminEmails();
+  if (listed.length === 0 || !listed.includes(normalizeEmail(email))) return;
+  await grantAdminByEmail(email);
+}
+
+/** The record as it stands after the bootstrap list has been applied to it. */
+async function withAdminBootstrap(record: UserRecord): Promise<UserRecord> {
+  if (!bootstrapAdminEmails().includes(record.email)) return record;
+  await grantAdminByEmail(record.email);
+  return { ...record, role: "admin" };
 }
 
 export async function recordLogin(id: string): Promise<void> {
   await connectToDatabase();
   await UserModel.updateOne({ _id: id }, { $set: { lastLoginAt: new Date() } }).exec();
+}
+
+/**
+ * Gives an account the admin role, by email. Used to grant the owner from
+ * ADMIN_EMAILS on sign-in and by the one-off grant script. Returns whether an
+ * account was actually changed, so a caller can tell "granted" from "already was".
+ */
+export async function grantAdminByEmail(email: string): Promise<boolean> {
+  await connectToDatabase();
+  const result = await UserModel.updateOne({ email: normalizeEmail(email), role: { $ne: "admin" } }, { $set: { role: "admin" } }).exec();
+  return result.modifiedCount === 1;
+}
+
+export async function setUserRole(id: string, role: UserRole): Promise<boolean> {
+  if (!Types.ObjectId.isValid(id)) return false;
+  await connectToDatabase();
+  const result = await UserModel.updateOne({ _id: new Types.ObjectId(id) }, { $set: { role } }).exec();
+  return result.matchedCount === 1;
 }
 
 export async function updateUserName(id: string, name: string): Promise<void> {

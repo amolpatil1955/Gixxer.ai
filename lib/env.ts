@@ -31,6 +31,12 @@ const envSchema = z.object({
     .regex(/^mongodb(\+srv)?:\/\/[^/]+\/[^/?]+/, "MONGODB_URI must include a database name, e.g. .../gixxer?..."),
   AUTH_GOOGLE_ID: optionalSecret,
   AUTH_GOOGLE_SECRET: optionalSecret,
+  /**
+   * Emails granted the admin role when they sign in, comma separated. The role
+   * itself lives on the user document and is what every check reads; this list
+   * only grants it, so a fresh database still has an owner.
+   */
+  ADMIN_EMAILS: withDefault(""),
   /** Text, reasoning and speech-to-text all run on Groq. */
   GROQ_API: optionalSecret,
   /** Images and embeddings run on Hugging Face inference providers. */
